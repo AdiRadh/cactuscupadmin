@@ -72,7 +72,7 @@ export const GuestInstructorsList: FC = () => {
             Manage guest instructor profiles and information
           </p>
         </div>
-        <Link to="/admin/guest-instructors/create">
+        <Link to="/guest-instructors/create">
           <Button>
             <Plus className="h-4 w-4 mr-2" />
             Add Guest Instructor
@@ -156,7 +156,7 @@ export const GuestInstructorsList: FC = () => {
                   )}
 
                   <div className="flex items-center gap-2 pt-3 border-t border-white/10">
-                    <Link to={`/admin/guest-instructors/edit/${instructor.id}`} className="flex-1">
+                    <Link to={`/guest-instructors/edit/${instructor.id}`} className="flex-1">
                       <Button variant="outline" size="sm" className="w-full">
                         <Edit className="h-4 w-4 mr-2" />
                         Edit

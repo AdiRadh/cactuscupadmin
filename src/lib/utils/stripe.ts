@@ -941,3 +941,782 @@ export async function updateTaxRateConfig(config: Partial<TaxRateConfig>): Promi
     }
   }
 }
+
+// ============ ORDER VERIFICATION FUNCTIONS ============
+
+export interface OrderVerificationItem {
+  orderId: string;
+  orderNumber: string;
+  stripeSessionId: string | null;
+  stripePaymentIntentId: string | null;
+  dbTotal: number; // in cents
+  stripeTotal: number | null; // in cents
+  status: 'match' | 'mismatch' | 'no_stripe_data' | 'pending' | 'error';
+  dbItems: Array<{
+    name: string;
+    quantity: number;
+    unitPrice: number;
+    total: number;
+  }>;
+  stripeItems: Array<{
+    name: string;
+    quantity: number;
+    unitPrice: number;
+    total: number;
+  }> | null;
+  errorMessage?: string;
+}
+
+export interface StripeVerificationResult {
+  userId: string;
+  totalOrders: number;
+  matchedOrders: number;
+  mismatchedOrders: number;
+  pendingOrders: number;
+  noStripeDataOrders: number;
+  errorOrders: number;
+  orders: OrderVerificationItem[];
+}
+
+/**
+ * Verify a user's order items against their Stripe transactions
+ * Handles multiple orders and transactions per user
+ */
+export async function verifyOrdersWithStripe(userId: string): Promise<StripeVerificationResult> {
+  try {
+    const { data, error } = await supabase.functions.invoke('verify-stripe-orders', {
+      body: { userId },
+    });
+
+    if (error) {
+      console.error('Error verifying orders with Stripe:', error);
+      throw new Error(error.message || 'Failed to verify orders with Stripe');
+    }
+
+    return data as StripeVerificationResult;
+  } catch (err) {
+    console.error('Order verification failed:', err);
+    throw err instanceof Error ? err : new Error('Failed to verify orders with Stripe');
+  }
+}
+
+export interface SyncOrderResult {
+  success: boolean;
+  orderId: string;
+  orderNumber: string;
+  itemsUpdated: number;
+  itemsCreated: number;
+  itemsDeleted: number;
+  newTotal: number;
+  error?: string;
+}
+
+/**
+ * Sync order items from Stripe to Supabase
+ * Uses Stripe as the source of truth to update database records
+ */
+export async function syncOrderFromStripe(orderId: string): Promise<SyncOrderResult> {
+  try {
+    const { data, error } = await supabase.functions.invoke('sync-order-from-stripe', {
+      body: { orderId },
+    });
+
+    if (error) {
+      console.error('Error syncing order from Stripe:', error);
+      throw new Error(error.message || 'Failed to sync order from Stripe');
+    }
+
+    return data as SyncOrderResult;
+  } catch (err) {
+    console.error('Order sync failed:', err);
+    throw err instanceof Error ? err : new Error('Failed to sync order from Stripe');
+  }
+}
+
+export interface BulkVerificationSummary {
+  totalUsers: number;
+  totalOrders: number;
+  matchedOrders: number;
+  mismatchedOrders: number;
+  pendingOrders: number;
+  noStripeDataOrders: number;
+  errorOrders: number;
+  userResults: Array<{
+    userId: string;
+    userName: string;
+    result: StripeVerificationResult;
+  }>;
+}
+
+/**
+ * Bulk verify all orders against Stripe
+ * Returns aggregated results for all users with orders
+ */
+export async function bulkVerifyOrdersWithStripe(
+  _onProgress?: (current: number, total: number, userName: string) => void
+): Promise<BulkVerificationSummary> {
+  try {
+    const { data, error } = await supabase.functions.invoke('bulk-verify-stripe-orders', {
+      body: {},
+    });
+
+    if (error) {
+      console.error('Error bulk verifying orders with Stripe:', error);
+      throw new Error(error.message || 'Failed to bulk verify orders with Stripe');
+    }
+
+    return data as BulkVerificationSummary;
+  } catch (err) {
+    console.error('Bulk order verification failed:', err);
+    throw err instanceof Error ? err : new Error('Failed to bulk verify orders with Stripe');
+  }
+}
+
+// ============ STRIPE CUSTOMER FUNCTIONS ============
+
+export interface StripeCustomer {
+  id: string;
+  email: string | null;
+  name: string | null;
+  phone: string | null;
+  created: number;
+  metadata: Record<string, string>;
+  address: {
+    city: string | null;
+    country: string | null;
+    line1: string | null;
+    line2: string | null;
+    postal_code: string | null;
+    state: string | null;
+  } | null;
+  defaultPaymentMethod: string | null;
+  balance: number;
+  currency: string | null;
+  delinquent: boolean;
+  invoicePrefix: string | null;
+  totalSpent: number;
+  paymentCount: number;
+}
+
+export interface ListCustomersResponse {
+  customers: StripeCustomer[];
+  hasMore: boolean;
+  totalCount: number;
+}
+
+export interface ListCustomersParams {
+  limit?: number;
+  startingAfter?: string;
+  email?: string;
+}
+
+/**
+ * List all Stripe customers
+ * Fetches customer data including payment history from Stripe
+ */
+export async function listStripeCustomers(
+  params: ListCustomersParams = {}
+): Promise<ListCustomersResponse> {
+  try {
+    const { data, error } = await supabase.functions.invoke('list-stripe-customers', {
+      body: params,
+    });
+
+    if (error) {
+      console.error('Error listing Stripe customers:', error);
+      throw new Error(error.message || 'Failed to list Stripe customers');
+    }
+
+    return data as ListCustomersResponse;
+  } catch (err) {
+    console.error('List Stripe customers failed:', err);
+    throw err instanceof Error ? err : new Error('Failed to list Stripe customers');
+  }
+}
+
+// ============ ADMIN REFUND FUNCTIONS ============
+
+export interface RefundRequest {
+  paymentIntentId?: string;
+  orderId?: string;
+  amount?: number; // Optional: partial refund amount in cents. If not provided, full refund
+  reason?: 'duplicate' | 'fraudulent' | 'requested_by_customer';
+}
+
+export interface RefundResult {
+  success: boolean;
+  refundId?: string;
+  amount?: number;
+  status?: string;
+  error?: string;
+}
+
+/**
+ * Process a refund for a payment (Admin only)
+ * Requires the user to be authenticated as an admin
+ * @param request - Refund request containing payment intent or order ID, optional amount for partial refund
+ */
+export async function processAdminRefund(request: RefundRequest): Promise<RefundResult> {
+  try {
+    const { data, error } = await supabase.functions.invoke('admin-refund-payment', {
+      body: request,
+    });
+
+    if (error) {
+      console.error('Error processing refund:', error);
+      return {
+        success: false,
+        error: error.message || 'Failed to process refund',
+      };
+    }
+
+    return data as RefundResult;
+  } catch (err) {
+    console.error('Refund processing failed:', err);
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Failed to process refund',
+    };
+  }
+}
+
+// ============ REGISTRATION REMOVAL FUNCTIONS ============
+
+export interface RemoveItemResult {
+  success: boolean;
+  error?: string;
+  refundResult?: RefundResult;
+}
+
+/**
+ * Remove a tournament registration and optionally refund
+ * Updates tournament capacity when removing
+ */
+export async function removeTournamentRegistration(
+  registrationId: string,
+  tournamentId: string,
+  refund: boolean = false,
+  paymentIntentId?: string
+): Promise<RemoveItemResult> {
+  try {
+    // First, get the order_id associated with this tournament registration
+    const { data: orderItem, error: orderItemError } = await supabase
+      .from('order_items')
+      .select('order_id, total')
+      .eq('tournament_registration_id', registrationId)
+      .single();
+
+    // Delete the tournament registration
+    const { error: deleteError } = await supabase
+      .from('tournament_registrations')
+      .delete()
+      .eq('id', registrationId);
+
+    if (deleteError) {
+      throw new Error(`Failed to delete tournament registration: ${deleteError.message}`);
+    }
+
+    // Update tournament current_registrations count (decrement)
+    const { error: updateError } = await supabase.rpc('decrement_tournament_registrations', {
+      tournament_id: tournamentId,
+    });
+
+    // If RPC doesn't exist, try direct update
+    if (updateError) {
+      const { data: tournament } = await supabase
+        .from('tournaments')
+        .select('current_registrations')
+        .eq('id', tournamentId)
+        .single();
+
+      if (tournament && tournament.current_registrations > 0) {
+        await supabase
+          .from('tournaments')
+          .update({ current_registrations: tournament.current_registrations - 1 })
+          .eq('id', tournamentId);
+      }
+    }
+
+    // Delete the order item if it exists
+    if (orderItem && !orderItemError) {
+      await supabase
+        .from('order_items')
+        .delete()
+        .eq('tournament_registration_id', registrationId);
+    }
+
+    // Process refund if requested
+    let refundResult: RefundResult | undefined;
+    if (refund && paymentIntentId) {
+      refundResult = await processAdminRefund({
+        paymentIntentId,
+        amount: orderItem?.total || undefined,
+        reason: 'requested_by_customer',
+      });
+    }
+
+    return {
+      success: true,
+      refundResult,
+    };
+  } catch (err) {
+    console.error('Remove tournament registration failed:', err);
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Failed to remove tournament registration',
+    };
+  }
+}
+
+/**
+ * Remove an order item (addon/merchandise) and optionally refund
+ * Updates addon inventory when removing
+ */
+export async function removeOrderItem(
+  orderItemId: string,
+  addonId: string | null,
+  quantity: number,
+  refund: boolean = false,
+  orderId?: string
+): Promise<RemoveItemResult> {
+  try {
+    // Get order info for refund
+    let paymentIntentId: string | undefined;
+    let itemTotal: number | undefined;
+
+    if (refund && orderId) {
+      const { data: order } = await supabase
+        .from('orders')
+        .select('stripe_payment_intent_id')
+        .eq('id', orderId)
+        .single();
+
+      paymentIntentId = order?.stripe_payment_intent_id || undefined;
+    }
+
+    // Get the item total before deleting
+    const { data: orderItem } = await supabase
+      .from('order_items')
+      .select('total')
+      .eq('id', orderItemId)
+      .single();
+
+    itemTotal = orderItem?.total || undefined;
+
+    // Delete the order item
+    const { error: deleteError } = await supabase
+      .from('order_items')
+      .delete()
+      .eq('id', orderItemId);
+
+    if (deleteError) {
+      throw new Error(`Failed to delete order item: ${deleteError.message}`);
+    }
+
+    // Update addon inventory (increment stock back)
+    if (addonId) {
+      const { data: addon } = await supabase
+        .from('addons')
+        .select('has_inventory, stock_quantity')
+        .eq('id', addonId)
+        .single();
+
+      if (addon?.has_inventory && addon.stock_quantity !== null) {
+        await supabase
+          .from('addons')
+          .update({ stock_quantity: addon.stock_quantity + quantity })
+          .eq('id', addonId);
+      }
+    }
+
+    // Process refund if requested
+    let refundResult: RefundResult | undefined;
+    if (refund && paymentIntentId && itemTotal) {
+      refundResult = await processAdminRefund({
+        paymentIntentId,
+        amount: itemTotal,
+        reason: 'requested_by_customer',
+      });
+    }
+
+    return {
+      success: true,
+      refundResult,
+    };
+  } catch (err) {
+    console.error('Remove order item failed:', err);
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Failed to remove order item',
+    };
+  }
+}
+
+/**
+ * Remove an event registration entry and optionally refund
+ */
+export async function removeEventRegistration(
+  registrationId: string,
+  refund: boolean = false
+): Promise<RemoveItemResult> {
+  try {
+    // Get the order item and order info for refund
+    const { data: orderItem } = await supabase
+      .from('order_items')
+      .select('order_id, total')
+      .eq('event_registration_id', registrationId)
+      .single();
+
+    let paymentIntentId: string | undefined;
+    if (refund && orderItem?.order_id) {
+      const { data: order } = await supabase
+        .from('orders')
+        .select('stripe_payment_intent_id')
+        .eq('id', orderItem.order_id)
+        .single();
+
+      paymentIntentId = order?.stripe_payment_intent_id || undefined;
+    }
+
+    // Delete the order item first
+    if (orderItem) {
+      await supabase
+        .from('order_items')
+        .delete()
+        .eq('event_registration_id', registrationId);
+    }
+
+    // Delete the event registration
+    const { error: deleteError } = await supabase
+      .from('event_registrations')
+      .delete()
+      .eq('id', registrationId);
+
+    if (deleteError) {
+      throw new Error(`Failed to delete event registration: ${deleteError.message}`);
+    }
+
+    // Process refund if requested
+    let refundResult: RefundResult | undefined;
+    if (refund && paymentIntentId && orderItem?.total) {
+      refundResult = await processAdminRefund({
+        paymentIntentId,
+        amount: orderItem.total,
+        reason: 'requested_by_customer',
+      });
+    }
+
+    return {
+      success: true,
+      refundResult,
+    };
+  } catch (err) {
+    console.error('Remove event registration failed:', err);
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Failed to remove event registration',
+    };
+  }
+}
+
+// ========================================
+// Stripe-Supabase Reconciliation Types
+// ========================================
+
+export interface ItemDiscrepancy {
+  itemName: string;
+  stripeQuantity: number;
+  stripeTotal: number;
+  supabaseQuantity: number;
+  supabaseTotal: number;
+  status: 'missing_in_supabase' | 'missing_in_stripe' | 'quantity_mismatch' | 'amount_mismatch';
+}
+
+export interface UserReconciliation {
+  email: string;
+  stripeCustomerId: string | null;
+  supabaseUserId: string | null;
+  stripeName: string | null;
+  supabaseName: string | null;
+  stripeTotal: number;
+  supabaseTotal: number;
+  totalDifference: number;
+  stripeItemCount: number;
+  supabaseItemCount: number;
+  discrepancies: ItemDiscrepancy[];
+  hasIssues: boolean;
+}
+
+export interface ReconciliationSummary {
+  totalStripeCustomers: number;
+  totalSupabaseUsers: number;
+  totalMatchedEmails: number;
+  usersWithDiscrepancies: number;
+  totalStripePurchases: number;
+  totalSupabasePurchases: number;
+  totalStripeAmount: number;
+  totalSupabaseAmount: number;
+  amountDifference: number;
+  users: UserReconciliation[];
+}
+
+/**
+ * Reconcile Stripe transactions with Supabase order records
+ * Fetches all customers from Stripe with their line items,
+ * compares against Supabase orders, and identifies discrepancies
+ */
+export async function reconcileStripeOrders(params?: {
+  emailFilter?: string;
+}): Promise<ReconciliationSummary> {
+  try {
+    const { data, error } = await supabase.functions.invoke('reconcile-stripe-orders', {
+      body: params || {},
+    });
+
+    if (error) {
+      console.error('Error reconciling Stripe orders:', error);
+      throw new Error(error.message || 'Failed to reconcile Stripe orders');
+    }
+
+    if (!data) {
+      throw new Error('No data returned from reconciliation');
+    }
+
+    return data as ReconciliationSummary;
+  } catch (err) {
+    console.error('Stripe reconciliation failed:', err);
+    throw err instanceof Error ? err : new Error('Failed to reconcile Stripe orders');
+  }
+}
+
+// ============ MISSING REGISTRATIONS FUNCTIONS ============
+
+export interface MissingRegistration {
+  orderId: string | null;
+  orderNumber: string | null;
+  userId: string | null;
+  userName: string;
+  userEmail: string | null;
+  orderItemId: string | null;
+  itemName: string;
+  itemType: string;
+  quantity: number;
+  unitPrice: number;
+  total: number;
+  paymentStatus: string;
+  stripeSessionId: string | null;
+  stripePaymentIntentId: string | null;
+  createdAt: string;
+  source: 'supabase' | 'stripe_only';
+}
+
+export interface StripeTransaction {
+  id: string;
+  amount: number;
+  description: string | null;
+  lineItems: Array<{
+    name: string;
+    quantity: number;
+    amount: number;
+  }>;
+}
+
+export interface UserWithMissingRegistrations {
+  userId: string;
+  userName: string;
+  userEmail: string | null;
+  stripeCustomerId: string | null;
+  missingRegistrations: MissingRegistration[];
+  stripeTransactions: StripeTransaction[];
+}
+
+export interface MissingRegistrationsSummary {
+  totalUsersAffected: number;
+  totalMissingRegistrations: number;
+  users: UserWithMissingRegistrations[];
+}
+
+/**
+ * Find orders where payment was made but registrations are missing
+ * Identifies order items that should have tournament/activity/event registrations
+ * but don't have the corresponding registration record linked
+ */
+export async function findMissingRegistrations(): Promise<MissingRegistrationsSummary> {
+  try {
+    const { data, error } = await supabase.functions.invoke('find-missing-registrations', {
+      body: {},
+    });
+
+    if (error) {
+      console.error('Error finding missing registrations:', error);
+      throw new Error(error.message || 'Failed to find missing registrations');
+    }
+
+    if (!data) {
+      throw new Error('No data returned from missing registrations check');
+    }
+
+    return data as MissingRegistrationsSummary;
+  } catch (err) {
+    console.error('Find missing registrations failed:', err);
+    throw err instanceof Error ? err : new Error('Failed to find missing registrations');
+  }
+}
+
+// ============ STRIPE SYNC DIAGNOSIS FUNCTIONS ============
+
+export interface LineItemDiagnosis {
+  stripeName: string;
+  stripeQuantity: number;
+  stripeAmount: number;
+  existsInOrderItems: boolean;
+  existsInRegistrations: boolean;
+  orderItemId: string | null;
+  registrationId: string | null;
+  registrationType: string | null;
+}
+
+export interface SessionDiagnosis {
+  stripeSessionId: string;
+  stripePaymentIntentId: string | null;
+  stripeAmount: number;
+  stripeStatus: string;
+  stripeCreated: string;
+  existsInOrders: boolean;
+  orderId: string | null;
+  orderNumber: string | null;
+  orderTotal: number | null;
+  orderPaymentStatus: string | null;
+  lineItems: LineItemDiagnosis[];
+  issues: string[];
+}
+
+export interface CustomerDiagnosis {
+  stripeCustomerId: string;
+  stripeEmail: string | null;
+  stripeName: string | null;
+  supabaseUserId: string | null;
+  supabaseUserName: string | null;
+  sessions: SessionDiagnosis[];
+  totalIssues: number;
+}
+
+export interface DiagnosisResult {
+  searchQuery: string | null;
+  customersScanned: number;
+  customersWithIssues: number;
+  totalSessionsWithIssues: number;
+  totalMissingOrders: number;
+  totalMissingLineItems: number;
+  totalMissingRegistrations: number;
+  customers: CustomerDiagnosis[];
+}
+
+export interface DiagnoseStripeSyncParams {
+  nameFilter?: string;
+  emailFilter?: string;
+}
+
+/**
+ * Diagnose Stripe sync issues for a specific customer or all customers
+ * Scans Stripe checkout sessions and compares against Supabase orders and registrations
+ * Use nameFilter or emailFilter to search for a specific customer
+ */
+export async function diagnoseStripeSync(params?: DiagnoseStripeSyncParams): Promise<DiagnosisResult> {
+  try {
+    const { data, error } = await supabase.functions.invoke('diagnose-stripe-sync', {
+      body: params || {},
+    });
+
+    if (error) {
+      console.error('Error diagnosing Stripe sync:', error);
+      throw new Error(error.message || 'Failed to diagnose Stripe sync');
+    }
+
+    if (!data) {
+      throw new Error('No data returned from Stripe sync diagnosis');
+    }
+
+    return data as DiagnosisResult;
+  } catch (err) {
+    console.error('Stripe sync diagnosis failed:', err);
+    throw err instanceof Error ? err : new Error('Failed to diagnose Stripe sync');
+  }
+}
+
+// ============ REGISTRATION SYNC VERIFICATION FUNCTIONS ============
+
+export interface SyncIssue {
+  issueType: 'missing_registration' | 'orphaned_registration' | 'missing_addon_link';
+  itemType: string;
+  itemName: string;
+  orderId: string | null;
+  orderNumber: string | null;
+  orderItemId: string | null;
+  registrationId: string | null;
+  userId: string;
+  userName: string;
+  total: number;
+  createdAt: string;
+  details: string;
+}
+
+export interface UserSyncResult {
+  userId: string;
+  userName: string;
+  userEmail: string | null;
+  // Counts
+  orderItemsCount: number;
+  tournamentRegistrationsCount: number;
+  activityRegistrationsCount: number;
+  eventRegistrationsCount: number;
+  specialEventRegistrationsCount: number;
+  addonPurchasesCount: number;
+  totalRegistrationsCount: number;
+  // Issues
+  issues: SyncIssue[];
+  hasIssues: boolean;
+}
+
+export interface SyncVerificationSummary {
+  totalUsersChecked: number;
+  totalUsersWithIssues: number;
+  totalOrderItems: number;
+  totalTournamentRegistrations: number;
+  totalActivityRegistrations: number;
+  totalEventRegistrations: number;
+  totalSpecialEventRegistrations: number;
+  totalAddonPurchases: number;
+  totalRegistrations: number;
+  totalMissingRegistrations: number;
+  totalOrphanedRegistrations: number;
+  totalMissingAddonLinks: number;
+  users: UserSyncResult[];
+}
+
+/**
+ * Verify that all paid order items have corresponding registrations/purchases
+ * and that all registrations have corresponding order items.
+ * This checks the sync between orders/order_items tables and registration/purchase tables.
+ */
+export async function verifyRegistrationSync(): Promise<SyncVerificationSummary> {
+  try {
+    const { data, error } = await supabase.functions.invoke('verify-registration-sync', {
+      body: {},
+    });
+
+    if (error) {
+      console.error('Error verifying registration sync:', error);
+      throw new Error(error.message || 'Failed to verify registration sync');
+    }
+
+    if (!data) {
+      throw new Error('No data returned from registration sync verification');
+    }
+
+    return data as SyncVerificationSummary;
+  } catch (err) {
+    console.error('Registration sync verification failed:', err);
+    throw err instanceof Error ? err : new Error('Failed to verify registration sync');
+  }
+}

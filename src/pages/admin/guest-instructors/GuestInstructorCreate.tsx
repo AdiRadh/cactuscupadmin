@@ -35,7 +35,7 @@ export const GuestInstructorCreate: FC = () => {
     setIsLoading(true);
     try {
       await createGuestInstructor(dbData);
-      navigate('/admin/guest-instructors');
+      navigate('/guest-instructors');
     } catch (error) {
       console.error('Error creating guest instructor:', error);
       alert('Failed to create guest instructor. Please try again.');
@@ -45,7 +45,7 @@ export const GuestInstructorCreate: FC = () => {
   };
 
   const handleCancel = () => {
-    navigate('/admin/guest-instructors');
+    navigate('/guest-instructors');
   };
 
   return (

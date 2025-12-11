@@ -2,7 +2,15 @@
   "permissions": {
     "allow": [
       "Bash(find:*)",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Bash(dir /b \"c:\\git\\Test\\CC\\cactuscupadmin\")",
+      "Bash(supabase functions deploy:*)",
+      "Bash(mkdir:*)",
+      "Bash(cat:*)",
+      "Bash(npm install:*)",
+      "Bash(dir /b \"c:\\git\\Test\\CC\\cactuscupadmin\\supabase\\functions\")",
+      "Bash(dir /b \"c:\\git\\Test\\CC\\cactuscupadmin\\src\\pages\\admin\\stripe-data\")",
+      "Bash(dir /b \"c:\\git\\Test\\CC\\cactuscupadmin\\src\\pages\\admin\\stripe-reconciliation\")"
     ]
   }
 }

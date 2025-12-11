@@ -60,7 +60,7 @@ export const GuestInstructorEdit: FC = () => {
     setIsLoading(true);
     try {
       await updateGuestInstructor(id, dbData);
-      navigate('/admin/guest-instructors');
+      navigate('/guest-instructors');
     } catch (error) {
       console.error('Error updating guest instructor:', error);
       alert('Failed to update guest instructor. Please try again.');
@@ -70,7 +70,7 @@ export const GuestInstructorEdit: FC = () => {
   };
 
   const handleCancel = () => {
-    navigate('/admin/guest-instructors');
+    navigate('/guest-instructors');
   };
 
   if (isFetching) {
