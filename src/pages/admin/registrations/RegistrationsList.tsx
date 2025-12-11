@@ -54,7 +54,8 @@ export const RegistrationsList: FC = () => {
       const { data: registrationsData, error: regError } = await client
         .from('event_registrations')
         .select('id, user_id, event_year, registration_fee, payment_status, registered_at, created_at')
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .limit(10000);
 
       if (regError) {
         console.error('Error fetching registrations:', regError);
@@ -74,7 +75,8 @@ export const RegistrationsList: FC = () => {
       const { data: profilesData, error: profilesError } = await client
         .from('profiles')
         .select('id, first_name, last_name, club')
-        .in('id', userIds);
+        .in('id', userIds)
+        .limit(10000);
 
       if (profilesError) {
         console.error('Error fetching profiles:', profilesError);
@@ -86,7 +88,8 @@ export const RegistrationsList: FC = () => {
         .from('waiver_signings')
         .select('user_id, status, signed_at, event_year')
         .in('user_id', userIds)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .limit(10000);
 
       if (waiverError) {
         console.error('Error fetching waiver signings:', waiverError);

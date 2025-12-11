@@ -1,17 +1,19 @@
 import type { FC } from 'react';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useTable } from '@refinedev/core';
 import { Link } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui';
-import { Plus, Edit, Trash2, Package, RefreshCw, Layers } from 'lucide-react';
+import { Plus, Edit, Trash2, Package, RefreshCw, Layers, Users } from 'lucide-react';
 import { DeleteConfirmDialog } from '@/components/admin/ConfirmDialog';
+import { AddonPurchasersModal } from './AddonPurchasersModal';
 import { useAdmin } from '@/hooks';
 import { formatPrice } from '@/lib/utils/formatting';
 import type { Addon, DbAddon } from '@/types';
 import { dbToAddon } from '@/types';
 import { syncAddonPricing, bulkSyncAddonsToStripe } from '@/lib/utils/stripe';
+import { supabaseAdmin, supabase } from '@/lib/api/supabase';
 
 /**
  * Admin add-ons list page
@@ -24,6 +26,11 @@ export const AddonsList: FC = () => {
   const [isDeleting, setIsDeleting] = useState(false);
   const [isBulkSyncing, setIsBulkSyncing] = useState(false);
   const [bulkSyncProgress, setBulkSyncProgress] = useState<{ current: number; total: number } | null>(null);
+  const [purchasersAddon, setPurchasersAddon] = useState<Addon | null>(null);
+  const [isPurchasersModalOpen, setIsPurchasersModalOpen] = useState(false);
+  const [soldCounts, setSoldCounts] = useState<Map<string, number>>(new Map());
+
+  const client = supabaseAdmin ?? supabase;
 
   const { tableQuery } = useTable<DbAddon>({
     resource: 'addons',
@@ -40,6 +47,41 @@ export const AddonsList: FC = () => {
     [tableQuery.data?.data]
   );
   const isLoading = tableQuery.isLoading;
+
+  // Fetch sold counts for all addons
+  useEffect(() => {
+    const fetchSoldCounts = async () => {
+      if (addons.length === 0) return;
+
+      try {
+        // Get all order items grouped by addon_id with sum of quantities
+        const { data, error } = await client
+          .from('order_items')
+          .select('addon_id, quantity')
+          .not('addon_id', 'is', null);
+
+        if (error) {
+          console.error('Error fetching sold counts:', error);
+          return;
+        }
+
+        // Calculate totals per addon
+        const counts = new Map<string, number>();
+        (data || []).forEach((item) => {
+          if (item.addon_id) {
+            const current = counts.get(item.addon_id) || 0;
+            counts.set(item.addon_id, current + (item.quantity || 1));
+          }
+        });
+
+        setSoldCounts(counts);
+      } catch (err) {
+        console.error('Error fetching sold counts:', err);
+      }
+    };
+
+    fetchSoldCounts();
+  }, [addons.length, client]);
 
   const handleSyncToStripe = async (addon: Addon) => {
     setSyncingIds((prev) => new Set(prev).add(addon.id));
@@ -142,6 +184,11 @@ export const AddonsList: FC = () => {
     }
   };
 
+  const handleViewPurchasers = (addon: Addon) => {
+    setPurchasersAddon(addon);
+    setIsPurchasersModalOpen(true);
+  };
+
   const getCategoryBadge = (category: string) => {
     const categoryColors: Record<string, string> = {
       apparel: 'success',
@@ -222,6 +269,9 @@ export const AddonsList: FC = () => {
                       Stock
                     </th>
                     <th className="text-left py-3 px-4 font-semibold text-white">
+                      Sold
+                    </th>
+                    <th className="text-left py-3 px-4 font-semibold text-white">
                       Stripe
                     </th>
                     <th className="text-left py-3 px-4 font-semibold text-white">
@@ -255,6 +305,9 @@ export const AddonsList: FC = () => {
                         ) : (
                           'Unlimited'
                         )}
+                      </td>
+                      <td className="py-3 px-4 text-white/90">
+                        {soldCounts.get(addon.id) || 0}
                       </td>
                       <td className="py-3 px-4">
                         <div className="flex items-center gap-2">
@@ -296,6 +349,14 @@ export const AddonsList: FC = () => {
                       </td>
                       <td className="py-3 px-4">
                         <div className="flex items-center justify-end gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleViewPurchasers(addon)}
+                            title="View purchasers"
+                          >
+                            <Users className="h-4 w-4" />
+                          </Button>
                           <Link to={`/admin/addons/edit/${addon.id}`}>
                             <Button variant="ghost" size="sm">
                               <Edit className="h-4 w-4" />
@@ -333,6 +394,13 @@ export const AddonsList: FC = () => {
         itemName={deleteItem?.name || ''}
         itemType="Add-On"
         isLoading={isDeleting}
+      />
+
+      {/* Purchasers Modal */}
+      <AddonPurchasersModal
+        open={isPurchasersModalOpen}
+        onOpenChange={setIsPurchasersModalOpen}
+        addon={purchasersAddon}
       />
     </div>
   );
