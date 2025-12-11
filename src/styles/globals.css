@@ -1,0 +1,179 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Alte Viking Font */
+@font-face {
+  font-family: 'Alte Viking';
+  src: url('/fonts/Alte Viking.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@layer base {
+  :root {
+    /* Light theme for content pages */
+    --background: 0 0% 100%;
+    --foreground: 174 60% 20%;
+    --card: 0 0% 100%;
+    --card-foreground: 174 60% 20%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 174 60% 20%;
+    /* Orange as primary/CTA color */
+    --primary: 24 95% 53%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 174 60% 45%;
+    --secondary-foreground: 0 0% 100%;
+    --muted: 0 0% 96%;
+    --muted-foreground: 174 30% 40%;
+    /* Golden yellow accent for highlights */
+    --accent: 45 93% 47%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 174 30% 85%;
+    --input: 0 0% 100%;
+    --ring: 24 95% 53%;
+    --radius: 0.75rem;
+  }
+
+  .dark {
+    /* Darker turquoise for dark mode background */
+    --background: 174 72% 20%;
+    --foreground: 0 0% 100%;
+    --card: 174 50% 15%;
+    --card-foreground: 0 0% 100%;
+    --popover: 174 50% 15%;
+    --popover-foreground: 0 0% 100%;
+    /* Orange primary for dark mode */
+    --primary: 24 95% 60%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 174 60% 30%;
+    --secondary-foreground: 0 0% 100%;
+    --muted: 174 40% 25%;
+    --muted-foreground: 0 0% 85%;
+    /* Golden accent for dark mode */
+    --accent: 45 93% 55%;
+    --accent-foreground: 0 0% 10%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 174 40% 35%;
+    --input: 174 50% 15%;
+    --ring: 24 95% 60%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground font-sans;
+    min-height: 100vh;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  /* Apply Alte Viking font to Cactus Cup branding */
+  .cactus-cup-title {
+    font-family: 'Alte Viking', serif;
+    font-weight: normal;
+  }
+
+  /* All headers should use Alte Viking */
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Alte Viking', serif;
+  }
+
+  /* Gradient backgrounds matching Cactus Cup design */
+  .bg-gradient-turquoise {
+    background: linear-gradient(to bottom right, hsl(174 72% 50%), hsl(174 72% 35%));
+  }
+
+  .bg-gradient-turquoise-dark {
+    background: linear-gradient(to right, hsl(174 72% 40%), hsl(174 72% 55%));
+  }
+
+  /* Card with backdrop blur for content on gradient backgrounds */
+  .card-glass {
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+  }
+
+  /* Turquoise card variant for dark backgrounds */
+  .card-turquoise {
+    background: rgba(20, 184, 166, 0.15);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(20, 184, 166, 0.3);
+  }
+}
+
+/* Accessibility Utilities */
+
+/* Screen reader only - element is visually hidden but accessible to screen readers */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+/* Make sr-only element visible when focused (skip links) */
+.focus\:not-sr-only:focus {
+  position: static;
+  width: auto;
+  height: auto;
+  padding: revert;
+  margin: revert;
+  overflow: visible;
+  clip: auto;
+  white-space: normal;
+}
+/* Animation delay utilities for staggered animations */
+.animation-delay-100 { animation-delay: 100ms; }
+.animation-delay-200 { animation-delay: 200ms; }
+.animation-delay-300 { animation-delay: 300ms; }
+.animation-delay-400 { animation-delay: 400ms; }
+.animation-delay-500 { animation-delay: 500ms; }
+.animation-delay-600 { animation-delay: 600ms; }
+.animation-delay-700 { animation-delay: 700ms; }
+.animation-delay-800 { animation-delay: 800ms; }
+
+/* Initial state for fade animations - elements start invisible */
+.animate-on-load {
+  opacity: 0;
+}
+
+/* Hover scale effect for interactive cards */
+.hover-lift {
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+.hover-lift:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  .animate-on-load {
+    opacity: 1;
+  }
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Cache bust Wed, Nov  5, 2025 10:19:31 AM */
