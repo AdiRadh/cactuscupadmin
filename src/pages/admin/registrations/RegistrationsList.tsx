@@ -3,9 +3,14 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui';
-import { Eye, Download, AlertTriangle, RefreshCw } from 'lucide-react';
+import { Eye, Download, AlertTriangle, RefreshCw, FileCheck, FileClock, FileX } from 'lucide-react';
 import { supabaseAdmin, hasAdminClient, supabase } from '@/lib/api/supabase';
 import { RegistrationDetailModal } from './RegistrationDetailModal';
+
+interface WaiverStatus {
+  status: 'signed' | 'pending' | 'sent' | 'viewed' | 'declined' | 'expired' | 'error' | 'none';
+  signedAt: string | null;
+}
 
 interface RegistrationWithProfile {
   id: string;
@@ -21,6 +26,8 @@ interface RegistrationWithProfile {
   club: string | null;
   // From auth.users (if available)
   email: string | null;
+  // Waiver status
+  waiver: WaiverStatus;
 }
 
 /**
@@ -74,6 +81,18 @@ export const RegistrationsList: FC = () => {
         // Continue without profiles - still show registrations
       }
 
+      // Fetch waiver signings for those users
+      const { data: waiverData, error: waiverError } = await client
+        .from('waiver_signings')
+        .select('user_id, status, signed_at, event_year')
+        .in('user_id', userIds)
+        .order('created_at', { ascending: false });
+
+      if (waiverError) {
+        console.error('Error fetching waiver signings:', waiverError);
+        // Continue without waiver data
+      }
+
       // Create a map of user_id -> profile
       const profilesMap = new Map<string, { first_name: string; last_name: string; club: string }>();
       (profilesData || []).forEach(profile => {
@@ -84,9 +103,24 @@ export const RegistrationsList: FC = () => {
         });
       });
 
-      // Combine registrations with profile data
+      // Create a map of user_id+event_year -> waiver status (most recent signing per user/year)
+      const waiverMap = new Map<string, WaiverStatus>();
+      (waiverData || []).forEach(signing => {
+        const key = `${signing.user_id}-${signing.event_year}`;
+        // Only keep the first (most recent) signing for each user/year
+        if (!waiverMap.has(key)) {
+          waiverMap.set(key, {
+            status: signing.status as WaiverStatus['status'],
+            signedAt: signing.signed_at,
+          });
+        }
+      });
+
+      // Combine registrations with profile and waiver data
       const combinedData = registrationsData.map((reg) => {
         const profile = profilesMap.get(reg.user_id);
+        const waiverKey = `${reg.user_id}-${reg.event_year}`;
+        const waiver = waiverMap.get(waiverKey) || { status: 'none' as const, signedAt: null };
         return {
           id: reg.id,
           user_id: reg.user_id,
@@ -99,6 +133,7 @@ export const RegistrationsList: FC = () => {
           last_name: profile?.last_name ?? null,
           club: profile?.club ?? null,
           email: null, // Can't easily get email from auth.users in client
+          waiver,
         };
       });
 
@@ -128,6 +163,56 @@ export const RegistrationsList: FC = () => {
         return <Badge variant="secondary">Refunded</Badge>;
       default:
         return <Badge variant="outline">{status}</Badge>;
+    }
+  };
+
+  const getWaiverBadge = (waiver: WaiverStatus) => {
+    switch (waiver.status) {
+      case 'signed':
+        return (
+          <Badge variant="success" className="gap-1">
+            <FileCheck className="h-3 w-3" />
+            Signed
+          </Badge>
+        );
+      case 'pending':
+      case 'sent':
+      case 'viewed':
+        return (
+          <Badge variant="warning" className="gap-1">
+            <FileClock className="h-3 w-3" />
+            Pending
+          </Badge>
+        );
+      case 'declined':
+        return (
+          <Badge variant="destructive" className="gap-1">
+            <FileX className="h-3 w-3" />
+            Declined
+          </Badge>
+        );
+      case 'expired':
+        return (
+          <Badge variant="secondary" className="gap-1">
+            <FileClock className="h-3 w-3" />
+            Expired
+          </Badge>
+        );
+      case 'error':
+        return (
+          <Badge variant="destructive" className="gap-1">
+            <FileX className="h-3 w-3" />
+            Error
+          </Badge>
+        );
+      case 'none':
+      default:
+        return (
+          <Badge className="gap-1 bg-black text-white border-white/20">
+            <FileX className="h-3 w-3" />
+            None
+          </Badge>
+        );
     }
   };
 
@@ -247,6 +332,9 @@ export const RegistrationsList: FC = () => {
                       Payment
                     </th>
                     <th className="text-left py-3 px-4 font-semibold text-white">
+                      Waiver
+                    </th>
+                    <th className="text-left py-3 px-4 font-semibold text-white">
                       Registered
                     </th>
                     <th className="text-right py-3 px-4 font-semibold text-white">
@@ -279,6 +367,9 @@ export const RegistrationsList: FC = () => {
                       </td>
                       <td className="py-3 px-4">
                         {getPaymentBadge(registration.payment_status)}
+                      </td>
+                      <td className="py-3 px-4">
+                        {getWaiverBadge(registration.waiver)}
                       </td>
                       <td className="py-3 px-4 text-white/90">
                         {formatDate(registration.registered_at || registration.created_at)}
