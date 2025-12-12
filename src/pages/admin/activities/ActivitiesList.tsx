@@ -142,7 +142,7 @@ export const ActivitiesList: FC = () => {
             Manage workshops, classes, and special events
           </p>
         </div>
-        <Link to="/admin/activities/create">
+        <Link to="/activities/create">
           <Button>
             <Plus className="h-4 w-4 mr-2" />
             Add Activity
@@ -278,7 +278,7 @@ export const ActivitiesList: FC = () => {
                               <EyeOff className="h-4 w-4 text-gray-400" />
                             )}
                           </Button>
-                          <Link to={`/admin/activities/edit/${activity.id}`}>
+                          <Link to={`/activities/edit/${activity.id}`}>
                             <Button variant="ghost" size="sm">
                               <Edit className="h-4 w-4" />
                             </Button>

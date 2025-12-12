@@ -55,7 +55,7 @@ export const HotelPartnerEdit: FC = () => {
     try {
       await updateHotelPartner(id, dbData);
       setIsUpdating(false);
-      navigate('/admin/hotel-partners');
+      navigate('/hotel-partners');
     } catch (error) {
       setIsUpdating(false);
       console.error('Error updating hotel partner:', error);
@@ -64,14 +64,14 @@ export const HotelPartnerEdit: FC = () => {
   };
 
   const handleCancel = () => {
-    navigate('/admin/hotel-partners');
+    navigate('/hotel-partners');
   };
 
   if (isLoading) {
     return (
       <div className="space-y-6">
         <div className="flex items-center gap-4">
-          <Link to="/admin/hotel-partners">
+          <Link to="/hotel-partners">
             <Button variant="ghost" size="icon">
               <ArrowLeft className="h-5 w-5" />
             </Button>
@@ -95,7 +95,7 @@ export const HotelPartnerEdit: FC = () => {
     return (
       <div className="space-y-6">
         <div className="flex items-center gap-4">
-          <Link to="/admin/hotel-partners">
+          <Link to="/hotel-partners">
             <Button variant="ghost" size="icon">
               <ArrowLeft className="h-5 w-5" />
             </Button>
@@ -119,7 +119,7 @@ export const HotelPartnerEdit: FC = () => {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center gap-4">
-        <Link to="/admin/hotel-partners">
+        <Link to="/hotel-partners">
           <Button variant="ghost" size="icon">
             <ArrowLeft className="h-5 w-5" />
           </Button>

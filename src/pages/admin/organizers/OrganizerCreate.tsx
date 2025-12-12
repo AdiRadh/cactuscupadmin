@@ -26,7 +26,7 @@ export const OrganizerCreate: FC = () => {
         },
         display_order: data.displayOrder,
       });
-      navigate('/admin/organizers');
+      navigate('/organizers');
     } catch (error) {
       console.error('Error creating organizer:', error);
       alert('Failed to create organizer. Please try again.');
@@ -43,7 +43,7 @@ export const OrganizerCreate: FC = () => {
       </div>
       <OrganizerForm
         onSubmit={handleSubmit}
-        onCancel={() => navigate('/admin/organizers')}
+        onCancel={() => navigate('/organizers')}
         isLoading={isLoading}
         submitText="Create Organizer"
       />

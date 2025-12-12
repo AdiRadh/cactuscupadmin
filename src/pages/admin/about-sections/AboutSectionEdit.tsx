@@ -47,7 +47,7 @@ export const AboutSectionEdit: FC = () => {
         display_order: data.displayOrder,
         is_published: data.isPublished,
       });
-      navigate('/admin/about-sections');
+      navigate('/about-sections');
     } catch (error) {
       console.error('Error updating about section:', error);
       alert('Failed to update about section. Please try again.');
@@ -85,7 +85,7 @@ export const AboutSectionEdit: FC = () => {
       <AboutSectionForm
         initialData={section}
         onSubmit={handleSubmit}
-        onCancel={() => navigate('/admin/about-sections')}
+        onCancel={() => navigate('/about-sections')}
         isLoading={isLoading}
         submitText="Update Section"
       />

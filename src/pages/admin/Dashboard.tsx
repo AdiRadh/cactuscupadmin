@@ -248,21 +248,21 @@ export const AdminDashboard: FC = () => {
           <CardContent>
             <div className="space-y-3">
               <button
-                onClick={() => navigate('/admin/tournaments/create')}
+                onClick={() => navigate('/tournaments/create')}
                 className="w-full text-left px-4 py-3 rounded-lg border border-white/20 hover:bg-white/5 transition-colors"
               >
                 <p className="font-medium text-white">Add New Tournament</p>
                 <p className="text-sm text-white/70">Create a new tournament event</p>
               </button>
               <button
-                onClick={() => navigate('/admin/activities/create')}
+                onClick={() => navigate('/activities/create')}
                 className="w-full text-left px-4 py-3 rounded-lg border border-white/20 hover:bg-white/5 transition-colors"
               >
                 <p className="font-medium text-white">Add Activity</p>
                 <p className="text-sm text-white/70">Schedule a workshop or class</p>
               </button>
               <button
-                onClick={() => navigate('/admin/email-templates')}
+                onClick={() => navigate('/email-templates')}
                 className="w-full text-left px-4 py-3 rounded-lg border border-white/20 hover:bg-white/5 transition-colors"
               >
                 <div className="flex items-center gap-2">
@@ -274,7 +274,7 @@ export const AdminDashboard: FC = () => {
                 </div>
               </button>
               <button
-                onClick={() => navigate('/admin/registrations')}
+                onClick={() => navigate('/registrations')}
                 className="w-full text-left px-4 py-3 rounded-lg border border-white/20 hover:bg-white/5 transition-colors"
               >
                 <p className="font-medium text-white">View All Registrations</p>

@@ -47,7 +47,7 @@ export const HotelPartnerCreate: FC = () => {
     try {
       await createHotelPartner(dbData);
       setIsLoading(false);
-      navigate('/admin/hotel-partners');
+      navigate('/hotel-partners');
     } catch (error) {
       setIsLoading(false);
       console.error('Error creating hotel partner:', error);
@@ -56,14 +56,14 @@ export const HotelPartnerCreate: FC = () => {
   };
 
   const handleCancel = () => {
-    navigate('/admin/hotel-partners');
+    navigate('/hotel-partners');
   };
 
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center gap-4">
-        <Link to="/admin/hotel-partners">
+        <Link to="/hotel-partners">
           <Button variant="ghost" size="icon">
             <ArrowLeft className="h-5 w-5" />
           </Button>

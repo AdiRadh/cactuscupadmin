@@ -24,7 +24,7 @@ export const AboutSectionCreate: FC = () => {
         metadata: null,
         section_type: null,
       });
-      navigate('/admin/about-sections');
+      navigate('/about-sections');
     } catch (error) {
       console.error('Error creating about section:', error);
       alert('Failed to create about section. Please try again.');
@@ -41,7 +41,7 @@ export const AboutSectionCreate: FC = () => {
       </div>
       <AboutSectionForm
         onSubmit={handleSubmit}
-        onCancel={() => navigate('/admin/about-sections')}
+        onCancel={() => navigate('/about-sections')}
         isLoading={isLoading}
         submitText="Create Section"
       />

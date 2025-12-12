@@ -99,7 +99,7 @@ export const SpecialEventCreate: FC = () => {
     try {
       await createSpecialEvent(dbData);
       setIsLoading(false);
-      navigate('/admin/special-events');
+      navigate('/special-events');
     } catch (error) {
       setIsLoading(false);
       console.error('Error creating special event:', error);
@@ -108,14 +108,14 @@ export const SpecialEventCreate: FC = () => {
   };
 
   const handleCancel = () => {
-    navigate('/admin/special-events');
+    navigate('/special-events');
   };
 
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center gap-4">
-        <Link to="/admin/special-events">
+        <Link to="/special-events">
           <Button variant="ghost" size="icon">
             <ArrowLeft className="h-5 w-5" />
           </Button>

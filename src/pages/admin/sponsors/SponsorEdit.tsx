@@ -33,7 +33,7 @@ export const SponsorEdit: FC = () => {
         setIsFetching(false);
         console.error('Error fetching sponsor:', error);
         alert('Failed to load sponsor');
-        navigate('/admin/sponsors');
+        navigate('/sponsors');
       }
     };
 
@@ -61,7 +61,7 @@ export const SponsorEdit: FC = () => {
     try {
       await updateSponsor(id, dbData);
       setIsLoading(false);
-      navigate('/admin/sponsors');
+      navigate('/sponsors');
     } catch (error) {
       setIsLoading(false);
       console.error('Error updating sponsor:', error);
@@ -70,7 +70,7 @@ export const SponsorEdit: FC = () => {
   };
 
   const handleCancel = () => {
-    navigate('/admin/sponsors');
+    navigate('/sponsors');
   };
 
   if (isFetching) {
@@ -105,7 +105,7 @@ export const SponsorEdit: FC = () => {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center gap-4">
-        <Link to="/admin/sponsors">
+        <Link to="/sponsors">
           <Button variant="ghost" size="icon">
             <ArrowLeft className="h-5 w-5" />
           </Button>

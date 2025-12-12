@@ -97,7 +97,7 @@ export const ActivityEdit: FC = () => {
       }
 
       setIsUpdating(false);
-      navigate('/admin/activities');
+      navigate('/activities');
     } catch (error) {
       setIsUpdating(false);
       console.error('Error updating activity:', error);
@@ -106,14 +106,14 @@ export const ActivityEdit: FC = () => {
   };
 
   const handleCancel = () => {
-    navigate('/admin/activities');
+    navigate('/activities');
   };
 
   if (isLoading) {
     return (
       <div className="space-y-6">
         <div className="flex items-center gap-4">
-          <Link to="/admin/activities">
+          <Link to="/activities">
             <Button variant="ghost" size="icon">
               <ArrowLeft className="h-5 w-5" />
             </Button>
@@ -137,7 +137,7 @@ export const ActivityEdit: FC = () => {
     return (
       <div className="space-y-6">
         <div className="flex items-center gap-4">
-          <Link to="/admin/activities">
+          <Link to="/activities">
             <Button variant="ghost" size="icon">
               <ArrowLeft className="h-5 w-5" />
             </Button>
@@ -161,7 +161,7 @@ export const ActivityEdit: FC = () => {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center gap-4">
-        <Link to="/admin/activities">
+        <Link to="/activities">
           <Button variant="ghost" size="icon">
             <ArrowLeft className="h-5 w-5" />
           </Button>

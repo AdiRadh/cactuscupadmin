@@ -52,7 +52,7 @@ export const OrganizerEdit: FC = () => {
         },
         display_order: data.displayOrder,
       });
-      navigate('/admin/organizers');
+      navigate('/organizers');
     } catch (error) {
       console.error('Error updating organizer:', error);
       alert('Failed to update organizer. Please try again.');
@@ -90,7 +90,7 @@ export const OrganizerEdit: FC = () => {
       <OrganizerForm
         initialData={organizer}
         onSubmit={handleSubmit}
-        onCancel={() => navigate('/admin/organizers')}
+        onCancel={() => navigate('/organizers')}
         isLoading={isLoading}
         submitText="Update Organizer"
       />

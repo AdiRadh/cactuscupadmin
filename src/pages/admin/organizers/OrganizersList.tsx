@@ -65,7 +65,7 @@ export const OrganizersList: FC = () => {
           <h1 className="text-3xl font-viking text-white">Organizers</h1>
           <p className="text-white/80 mt-2">Manage event organizer profiles</p>
         </div>
-        <Link to="/admin/organizers/create">
+        <Link to="/organizers/create">
           <Button>
             <Plus className="h-4 w-4 mr-2" />
             Add Organizer
@@ -118,7 +118,7 @@ export const OrganizersList: FC = () => {
                     </div>
                   )}
                   <div className="flex items-center gap-2 pt-3 border-t border-white/10">
-                    <Link to={`/admin/organizers/edit/${org.id}`} className="flex-1">
+                    <Link to={`/organizers/edit/${org.id}`} className="flex-1">
                       <Button variant="outline" size="sm" className="w-full">
                         <Edit className="h-4 w-4 mr-2" />
                         Edit

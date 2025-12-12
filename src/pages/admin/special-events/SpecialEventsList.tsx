@@ -178,7 +178,7 @@ export const SpecialEventsList: FC = () => {
             Manage special events and registrations
           </p>
         </div>
-        <Link to="/admin/special-events/create">
+        <Link to="/special-events/create">
           <Button>
             <Plus className="h-4 w-4 mr-2" />
             Add Special Event
@@ -305,7 +305,7 @@ export const SpecialEventsList: FC = () => {
                       </td>
                       <td className="py-3 px-4">
                         <div className="flex items-center justify-end gap-2">
-                          <Link to={`/admin/special-events/edit/${event.id}`}>
+                          <Link to={`/special-events/edit/${event.id}`}>
                             <Button variant="ghost" size="sm">
                               <Edit className="h-4 w-4" />
                             </Button>

@@ -43,7 +43,7 @@ export const AddonCreate: FC = () => {
     try {
       await createAddon(dbData);
       setIsLoading(false);
-      navigate('/admin/addons');
+      navigate('/addons');
     } catch (error) {
       setIsLoading(false);
       console.error('Error creating addon:', error);
@@ -52,14 +52,14 @@ export const AddonCreate: FC = () => {
   };
 
   const handleCancel = () => {
-    navigate('/admin/addons');
+    navigate('/addons');
   };
 
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center gap-4">
-        <Link to="/admin/addons">
+        <Link to="/addons">
           <Button variant="ghost" size="icon">
             <ArrowLeft className="h-5 w-5" />
           </Button>

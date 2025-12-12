@@ -48,7 +48,7 @@ export const ActivityCreate: FC = () => {
     try {
       await createActivity(dbData);
       setIsLoading(false);
-      navigate('/admin/activities');
+      navigate('/activities');
     } catch (error) {
       setIsLoading(false);
       console.error('Error creating activity:', error);
@@ -57,14 +57,14 @@ export const ActivityCreate: FC = () => {
   };
 
   const handleCancel = () => {
-    navigate('/admin/activities');
+    navigate('/activities');
   };
 
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center gap-4">
-        <Link to="/admin/activities">
+        <Link to="/activities">
           <Button variant="ghost" size="icon">
             <ArrowLeft className="h-5 w-5" />
           </Button>

@@ -49,7 +49,7 @@ export const AddonEdit: FC = () => {
     try {
       await updateAddon(id, dbData);
       setIsUpdating(false);
-      navigate('/admin/addons');
+      navigate('/addons');
     } catch (error) {
       setIsUpdating(false);
       console.error('Error updating addon:', error);
@@ -58,14 +58,14 @@ export const AddonEdit: FC = () => {
   };
 
   const handleCancel = () => {
-    navigate('/admin/addons');
+    navigate('/addons');
   };
 
   if (isLoading) {
     return (
       <div className="space-y-6">
         <div className="flex items-center gap-4">
-          <Link to="/admin/addons">
+          <Link to="/addons">
             <Button variant="ghost" size="icon">
               <ArrowLeft className="h-5 w-5" />
             </Button>
@@ -89,7 +89,7 @@ export const AddonEdit: FC = () => {
     return (
       <div className="space-y-6">
         <div className="flex items-center gap-4">
-          <Link to="/admin/addons">
+          <Link to="/addons">
             <Button variant="ghost" size="icon">
               <ArrowLeft className="h-5 w-5" />
             </Button>
@@ -113,7 +113,7 @@ export const AddonEdit: FC = () => {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center gap-4">
-        <Link to="/admin/addons">
+        <Link to="/addons">
           <Button variant="ghost" size="icon">
             <ArrowLeft className="h-5 w-5" />
           </Button>

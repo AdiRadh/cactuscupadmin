@@ -34,7 +34,7 @@ export const SponsorCreate: FC = () => {
     try {
       await createSponsor(dbData);
       setIsLoading(false);
-      navigate('/admin/sponsors');
+      navigate('/sponsors');
     } catch (error) {
       setIsLoading(false);
       console.error('Error creating sponsor:', error);
@@ -43,14 +43,14 @@ export const SponsorCreate: FC = () => {
   };
 
   const handleCancel = () => {
-    navigate('/admin/sponsors');
+    navigate('/sponsors');
   };
 
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center gap-4">
-        <Link to="/admin/sponsors">
+        <Link to="/sponsors">
           <Button variant="ghost" size="icon">
             <ArrowLeft className="h-5 w-5" />
           </Button>

@@ -160,7 +160,7 @@ export const AboutSectionsList: FC = () => {
           <h1 className="text-3xl font-viking text-white">About Page</h1>
           <p className="text-white/80 mt-2">Manage About page content and quick info cards</p>
         </div>
-        <Link to="/admin/about-sections/create">
+        <Link to="/about-sections/create">
           <Button>
             <Plus className="h-4 w-4 mr-2" />
             Add Section
@@ -348,7 +348,7 @@ export const AboutSectionsList: FC = () => {
                     </div>
                   </div>
                   <div className="flex gap-2">
-                    <Link to={`/admin/about-sections/edit/${section.id}`}>
+                    <Link to={`/about-sections/edit/${section.id}`}>
                       <Button variant="outline" size="sm">
                         <Edit className="h-4 w-4 mr-2" />
                         Edit

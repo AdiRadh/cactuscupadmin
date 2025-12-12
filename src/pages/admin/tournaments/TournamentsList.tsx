@@ -5,13 +5,14 @@ import { useAdmin } from '@/hooks';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui';
-import { Plus, Edit, Trash2, Package, Eye, EyeOff, RefreshCw, Save, GripVertical, Layers } from 'lucide-react';
+import { Plus, Edit, Trash2, Package, Eye, EyeOff, RefreshCw, Save, GripVertical, Layers, Users } from 'lucide-react';
 import { formatPrice } from '@/lib/utils/formatting';
 import { DeleteConfirmDialog } from '@/components/admin/ConfirmDialog';
 import type { Tournament } from '@/types';
 import { syncTournamentToStripe, syncTournamentPricing, bulkSyncTournamentsToStripe } from '@/lib/utils/stripe';
 import { DraggableTournamentList } from '@/components/admin/DraggableTournamentList';
 import { supabase } from '@/lib/api/supabase';
+import { TournamentRegistrationsModal } from './TournamentRegistrationsModal';
 
 /**
  * Admin tournaments list page
@@ -30,6 +31,7 @@ export const TournamentsList: FC = () => {
   const [isSavingOrder, setIsSavingOrder] = useState(false);
   const [isBulkSyncing, setIsBulkSyncing] = useState(false);
   const [bulkSyncProgress, setBulkSyncProgress] = useState<{ current: number; total: number } | null>(null);
+  const [registrationsTournament, setRegistrationsTournament] = useState<Tournament | null>(null);
 
   const { listTournaments, deleteTournament, updateTournament } = useAdmin();
 
@@ -319,7 +321,7 @@ export const TournamentsList: FC = () => {
                 <GripVertical className="h-4 w-4 mr-2" />
                 Reorder
               </Button>
-              <Link to="/admin/tournaments/create">
+              <Link to="/tournaments/create">
                 <Button>
                   <Plus className="h-4 w-4 mr-2" />
                   Add Tournament
@@ -455,6 +457,15 @@ export const TournamentsList: FC = () => {
                           <Button
                             variant="ghost"
                             size="sm"
+                            onClick={() => setRegistrationsTournament(tournament)}
+                            title="View registrations"
+                            className="hover:bg-blue-500/20"
+                          >
+                            <Users className="h-4 w-4 text-blue-400" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
                             onClick={() => handleToggleVisibility(tournament)}
                             disabled={togglingIds.has(tournament.id)}
                             title={tournament.visible ? 'Hide from public' : 'Show on public'}
@@ -466,7 +477,7 @@ export const TournamentsList: FC = () => {
                               <EyeOff className="h-4 w-4 text-gray-400" />
                             )}
                           </Button>
-                          <Link to={`/admin/tournaments/edit/${tournament.id}`}>
+                          <Link to={`/tournaments/edit/${tournament.id}`}>
                             <Button variant="ghost" size="sm">
                               <Edit className="h-4 w-4" />
                             </Button>
@@ -503,6 +514,17 @@ export const TournamentsList: FC = () => {
         itemName={deleteItem?.name || ''}
         itemType="Tournament"
         isLoading={isDeleting}
+      />
+
+      {/* Tournament Registrations Modal */}
+      <TournamentRegistrationsModal
+        open={registrationsTournament !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setRegistrationsTournament(null);
+          }
+        }}
+        tournament={registrationsTournament}
       />
     </div>
   );

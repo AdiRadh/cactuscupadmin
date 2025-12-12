@@ -10,7 +10,8 @@
       "Bash(npm install:*)",
       "Bash(dir /b \"c:\\git\\Test\\CC\\cactuscupadmin\\supabase\\functions\")",
       "Bash(dir /b \"c:\\git\\Test\\CC\\cactuscupadmin\\src\\pages\\admin\\stripe-data\")",
-      "Bash(dir /b \"c:\\git\\Test\\CC\\cactuscupadmin\\src\\pages\\admin\\stripe-reconciliation\")"
+      "Bash(dir /b \"c:\\git\\Test\\CC\\cactuscupadmin\\src\\pages\\admin\\stripe-reconciliation\")",
+      "Bash(dir /b \"c:\\git\\Test\\CC\\cactuscupadmin\\supabase\")"
     ]
   }
 }

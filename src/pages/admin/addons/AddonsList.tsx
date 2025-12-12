@@ -228,7 +228,7 @@ export const AddonsList: FC = () => {
               </>
             )}
           </Button>
-          <Link to="/admin/addons/create">
+          <Link to="/addons/create">
             <Button>
               <Plus className="h-4 w-4 mr-2" />
               Add Product
@@ -357,7 +357,7 @@ export const AddonsList: FC = () => {
                           >
                             <Users className="h-4 w-4" />
                           </Button>
-                          <Link to={`/admin/addons/edit/${addon.id}`}>
+                          <Link to={`/addons/edit/${addon.id}`}>
                             <Button variant="ghost" size="sm">
                               <Edit className="h-4 w-4" />
                             </Button>

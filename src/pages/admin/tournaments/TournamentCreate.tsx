@@ -54,7 +54,7 @@ export const TournamentCreate: FC = () => {
     try {
       await createTournament(dbData);
       setIsLoading(false);
-      navigate('/admin/tournaments');
+      navigate('/tournaments');
     } catch (error) {
       setIsLoading(false);
       console.error('Error creating tournament:', error);
@@ -63,14 +63,14 @@ export const TournamentCreate: FC = () => {
   };
 
   const handleCancel = () => {
-    navigate('/admin/tournaments');
+    navigate('/tournaments');
   };
 
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center gap-4">
-        <Link to="/admin/tournaments">
+        <Link to="/tournaments">
           <Button variant="ghost" size="icon">
             <ArrowLeft className="h-5 w-5" />
           </Button>

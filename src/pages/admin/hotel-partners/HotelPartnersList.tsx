@@ -78,7 +78,7 @@ export const HotelPartnersList: FC = () => {
             Manage hotel partnership information and booking codes
           </p>
         </div>
-        <Link to="/admin/hotel-partners/create">
+        <Link to="/hotel-partners/create">
           <Button>
             <Plus className="h-4 w-4 mr-2" />
             Add Hotel Partner
@@ -176,7 +176,7 @@ export const HotelPartnersList: FC = () => {
 
                   {/* Actions */}
                   <div className="flex items-center gap-2 pt-3 border-t border-white/10">
-                    <Link to={`/admin/hotel-partners/edit/${hotel.id}`} className="flex-1">
+                    <Link to={`/hotel-partners/edit/${hotel.id}`} className="flex-1">
                       <Button variant="outline" size="sm" className="w-full">
                         <Edit className="h-4 w-4 mr-2" />
                         Edit

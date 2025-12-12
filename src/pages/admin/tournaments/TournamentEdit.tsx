@@ -83,7 +83,7 @@ export const TournamentEdit: FC = () => {
       }
 
       setIsUpdating(false);
-      navigate('/admin/tournaments');
+      navigate('/tournaments');
     } catch (error) {
       setIsUpdating(false);
       console.error('Error updating tournament:', error);
@@ -92,14 +92,14 @@ export const TournamentEdit: FC = () => {
   };
 
   const handleCancel = () => {
-    navigate('/admin/tournaments');
+    navigate('/tournaments');
   };
 
   if (isLoading) {
     return (
       <div className="space-y-6">
         <div className="flex items-center gap-4">
-          <Link to="/admin/tournaments">
+          <Link to="/tournaments">
             <Button variant="ghost" size="icon">
               <ArrowLeft className="h-5 w-5" />
             </Button>
@@ -123,7 +123,7 @@ export const TournamentEdit: FC = () => {
     return (
       <div className="space-y-6">
         <div className="flex items-center gap-4">
-          <Link to="/admin/tournaments">
+          <Link to="/tournaments">
             <Button variant="ghost" size="icon">
               <ArrowLeft className="h-5 w-5" />
             </Button>
@@ -147,7 +147,7 @@ export const TournamentEdit: FC = () => {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center gap-4">
-        <Link to="/admin/tournaments">
+        <Link to="/tournaments">
           <Button variant="ghost" size="icon">
             <ArrowLeft className="h-5 w-5" />
           </Button>

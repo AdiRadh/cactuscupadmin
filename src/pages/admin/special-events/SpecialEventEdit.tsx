@@ -119,7 +119,7 @@ export const SpecialEventEdit: FC = () => {
       }
 
       setIsUpdating(false);
-      navigate('/admin/special-events');
+      navigate('/special-events');
     } catch (error) {
       setIsUpdating(false);
       console.error('Error updating special event:', error);
@@ -128,14 +128,14 @@ export const SpecialEventEdit: FC = () => {
   };
 
   const handleCancel = () => {
-    navigate('/admin/special-events');
+    navigate('/special-events');
   };
 
   if (isLoading) {
     return (
       <div className="space-y-6">
         <div className="flex items-center gap-4">
-          <Link to="/admin/special-events">
+          <Link to="/special-events">
             <Button variant="ghost" size="icon">
               <ArrowLeft className="h-5 w-5" />
             </Button>
@@ -159,7 +159,7 @@ export const SpecialEventEdit: FC = () => {
     return (
       <div className="space-y-6">
         <div className="flex items-center gap-4">
-          <Link to="/admin/special-events">
+          <Link to="/special-events">
             <Button variant="ghost" size="icon">
               <ArrowLeft className="h-5 w-5" />
             </Button>
@@ -183,7 +183,7 @@ export const SpecialEventEdit: FC = () => {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center gap-4">
-        <Link to="/admin/special-events">
+        <Link to="/special-events">
           <Button variant="ghost" size="icon">
             <ArrowLeft className="h-5 w-5" />
           </Button>
