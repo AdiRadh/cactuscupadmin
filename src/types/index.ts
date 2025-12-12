@@ -210,6 +210,29 @@ export interface SpecialEventRegistration {
 export type RegistrationStatus = 'confirmed' | 'cancelled' | 'waitlist';
 
 // ============================================================================
+// Waitlist Types
+// ============================================================================
+
+export type WaitlistStatus = 'waiting' | 'promoted' | 'cancelled';
+
+export interface WaitlistEntry {
+  id: string;
+  userId: string;
+  tournamentId: string;
+  position: number;
+  joinedAt: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  status: WaitlistStatus;
+  promotedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  // Joined from tournaments table
+  tournamentName?: string;
+}
+
+// ============================================================================
 // Event Registration Types
 // ============================================================================
 

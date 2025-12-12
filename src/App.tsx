@@ -40,6 +40,7 @@ import { SponsorEdit } from '@/pages/admin/sponsors/SponsorEdit';
 import { EmailTemplatesList } from '@/pages/admin/email-templates/EmailTemplatesList';
 import { EventRegistrationSettings } from '@/pages/admin/event-registration-settings/EventRegistrationSettings';
 import { WaiverSettings } from '@/pages/admin/waiver-settings/WaiverSettings';
+import { WaitlistList } from '@/pages/admin/waitlist/WaitlistList';
 
 /**
  * Admin Panel App component
@@ -179,6 +180,13 @@ export const App: FC = () => {
               label: 'Waiver Settings',
             },
           },
+          {
+            name: 'waitlist',
+            list: '/waitlist',
+            meta: {
+              label: 'Waitlist',
+            },
+          },
         ]}
         options={{
           syncWithLocation: true,
@@ -230,6 +238,7 @@ export const App: FC = () => {
                     <Route path="/event-registration-settings" element={<EventRegistrationSettings />} />
                     <Route path="/email-templates" element={<EmailTemplatesList />} />
                     <Route path="/waiver-settings" element={<WaiverSettings />} />
+                    <Route path="/waitlist" element={<WaitlistList />} />
                     <Route path="*" element={<Navigate to="/" replace />} />
                   </Routes>
                 </AdminLayout>

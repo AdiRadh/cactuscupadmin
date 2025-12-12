@@ -33,3 +33,6 @@ export { useHotelBookingUrl } from './config';
 // Data hooks
 export { useAdmin } from './data';
 export type { AdminState, UseAdminReturn, ListOptions } from './data';
+
+export { useWaitlist } from './data/useWaitlist';
+export type { UseWaitlistReturn, CreateWaitlistEntryData, RegisteredUser } from './data/useWaitlist';

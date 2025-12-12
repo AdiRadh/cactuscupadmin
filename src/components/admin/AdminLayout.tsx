@@ -19,6 +19,7 @@ import {
   Ticket,
   HandHeart,
   FileSignature,
+  ClipboardList,
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { cn } from '@/lib/utils/cn';
@@ -47,6 +48,7 @@ const navItems: NavItem[] = [
   { label: 'Tournaments', icon: Swords, path: '/tournaments' },
   { label: 'Activities', icon: Calendar, path: '/activities' },
   { label: 'Registrations', icon: Users, path: '/registrations' },
+  { label: 'Waitlist', icon: ClipboardList, path: '/waitlist' },
   { label: 'Add-Ons', icon: Package, path: '/addons' },
   { label: 'Hotel Partners', icon: Hotel, path: '/hotel-partners' },
   { label: 'Sponsors & Vendors', icon: Award, path: '/sponsors' },

@@ -38,6 +38,7 @@ import { SponsorEdit } from './sponsors/SponsorEdit';
 import { EmailTemplatesList } from './email-templates/EmailTemplatesList';
 import { EventRegistrationSettings } from './event-registration-settings/EventRegistrationSettings';
 import { WaiverSettings } from './waiver-settings/WaiverSettings';
+import { WaitlistList } from './waitlist/WaitlistList';
 
 /**
  * Admin section root component
@@ -176,6 +177,13 @@ export const Admin: FC = () => {
             label: 'Waiver Settings',
           },
         },
+        {
+          name: 'waitlist',
+          list: '/admin/waitlist',
+          meta: {
+            label: 'Waitlist',
+          },
+        },
       ]}
       options={{
         syncWithLocation: true,
@@ -218,6 +226,7 @@ export const Admin: FC = () => {
           <Route path="/event-registration-settings" element={<EventRegistrationSettings />} />
           <Route path="/email-templates" element={<EmailTemplatesList />} />
           <Route path="/waiver-settings" element={<WaiverSettings />} />
+          <Route path="/waitlist" element={<WaitlistList />} />
           <Route path="*" element={<Navigate to="/admin" replace />} />
         </Routes>
       </AdminLayout>
