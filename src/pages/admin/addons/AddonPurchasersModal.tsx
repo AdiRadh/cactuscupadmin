@@ -58,11 +58,12 @@ export const AddonPurchasersModal: FC<AddonPurchasersModalProps> = ({
     setError(null);
 
     try {
-      // Get all order items for this addon
+      // Get all order items for this addon from completed orders only
       const { data: orderItems, error: itemsError } = await client
         .from('order_items')
-        .select('id, order_id, quantity, unit_price, total, variant_name, created_at')
-        .eq('addon_id', addon.id);
+        .select('id, order_id, quantity, unit_price, total, variant_name, created_at, order:orders!inner(payment_status)')
+        .eq('addon_id', addon.id)
+        .eq('order.payment_status', 'completed');
 
       if (itemsError) {
         console.error('Error fetching order items:', itemsError);

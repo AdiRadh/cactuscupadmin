@@ -54,11 +54,12 @@ export const AddonsList: FC = () => {
       if (addons.length === 0) return;
 
       try {
-        // Get all order items grouped by addon_id with sum of quantities
+        // Get all order items from completed orders, grouped by addon_id with sum of quantities
         const { data, error } = await client
           .from('order_items')
-          .select('addon_id, quantity')
-          .not('addon_id', 'is', null);
+          .select('addon_id, quantity, order:orders!inner(payment_status)')
+          .not('addon_id', 'is', null)
+          .eq('order.payment_status', 'completed');
 
         if (error) {
           console.error('Error fetching sold counts:', error);
