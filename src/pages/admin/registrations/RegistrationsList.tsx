@@ -3,15 +3,18 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui';
-import { Eye, Download, AlertTriangle, RefreshCw, FileCheck, FileClock, FileX, ShieldCheck, CheckCircle2, XCircle, ChevronDown, ChevronUp, UserPlus, Link2 } from 'lucide-react';
+import { Eye, Download, AlertTriangle, RefreshCw, FileCheck, FileClock, FileX, ShieldCheck, CheckCircle2, XCircle, ChevronDown, ChevronUp, UserPlus, Link2, Users, Ticket } from 'lucide-react';
 import { supabaseAdmin, hasAdminClient, supabase } from '@/lib/api/supabase';
 import { RegistrationDetailModal } from './RegistrationDetailModal';
 import { AddTournamentEntryModal } from './AddTournamentEntryModal';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/Tabs';
 import { bulkVerifyOrdersWithStripe, syncOrderFromStripe, findMissingRegistrations, verifyRegistrationSync, type BulkVerificationSummary, type MissingRegistrationsSummary, type SyncVerificationSummary } from '@/lib/utils/stripe';
 
 interface WaiverStatus {
   status: 'signed' | 'pending' | 'sent' | 'viewed' | 'declined' | 'expired' | 'error' | 'none';
   signedAt: string | null;
+  waiverSigningId: string | null;
+  boldsignDocumentId: string | null;
 }
 
 interface RegistrationWithProfile {
@@ -55,12 +58,15 @@ export const RegistrationsList: FC = () => {
   const [showMissingResults, setShowMissingResults] = useState(false);
   const [expandedMissingUsers, setExpandedMissingUsers] = useState<Set<string>>(new Set());
   const [isAddTournamentModalOpen, setIsAddTournamentModalOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<'all' | 'paid' | 'spectators'>('all');
   // Registration sync verification state
   const [isVerifyingSync, setIsVerifyingSync] = useState(false);
   const [syncVerificationResult, setSyncVerificationResult] = useState<SyncVerificationSummary | null>(null);
   const [syncVerificationError, setSyncVerificationError] = useState<string | null>(null);
   const [showSyncResults, setShowSyncResults] = useState(false);
   const [expandedSyncUsers, setExpandedSyncUsers] = useState<Set<string>>(new Set());
+  // Waiver download state
+  const [downloadingWaiverId, setDownloadingWaiverId] = useState<string | null>(null);
 
   const adminConfigured = hasAdminClient();
   const client = supabaseAdmin ?? supabase;
@@ -106,7 +112,7 @@ export const RegistrationsList: FC = () => {
       // Fetch waiver signings for those users
       const { data: waiverData, error: waiverError } = await client
         .from('waiver_signings')
-        .select('user_id, status, signed_at, event_year')
+        .select('id, user_id, status, signed_at, event_year, boldsign_document_id')
         .in('user_id', userIds)
         .order('created_at', { ascending: false })
         .limit(10000);
@@ -156,6 +162,8 @@ export const RegistrationsList: FC = () => {
           waiverMap.set(key, {
             status: signing.status as WaiverStatus['status'],
             signedAt: signing.signed_at,
+            waiverSigningId: signing.id,
+            boldsignDocumentId: signing.boldsign_document_id,
           });
         }
       });
@@ -164,7 +172,7 @@ export const RegistrationsList: FC = () => {
       const combinedData = registrationsData.map((reg) => {
         const profile = profilesMap.get(reg.user_id);
         const waiverKey = `${reg.user_id}-${reg.event_year}`;
-        const waiver = waiverMap.get(waiverKey) || { status: 'none' as const, signedAt: null };
+        const waiver = waiverMap.get(waiverKey) || { status: 'none' as const, signedAt: null, waiverSigningId: null, boldsignDocumentId: null };
         return {
           id: reg.id,
           user_id: reg.user_id,
@@ -280,6 +288,49 @@ export const RegistrationsList: FC = () => {
   const handleViewRegistration = (registration: RegistrationWithProfile) => {
     setSelectedRegistration(registration);
     setIsModalOpen(true);
+  };
+
+  const handleDownloadWaiver = async (registration: RegistrationWithProfile) => {
+    if (!registration.waiver.waiverSigningId || !registration.waiver.boldsignDocumentId) {
+      console.error('No waiver signing ID or BoldSign document ID available');
+      return;
+    }
+
+    setDownloadingWaiverId(registration.waiver.waiverSigningId);
+
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData.session) {
+        throw new Error('Not authenticated');
+      }
+
+      const response = await supabase.functions.invoke('download-signed-waiver', {
+        body: { waiverSigningId: registration.waiver.waiverSigningId },
+      });
+
+      if (response.error) {
+        throw new Error(response.error.message || 'Failed to download waiver');
+      }
+
+      // The response data should be the PDF blob
+      const blob = new Blob([response.data], { type: 'application/pdf' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      const signerName = registration.first_name && registration.last_name
+        ? `${registration.first_name}_${registration.last_name}`.replace(/[^a-zA-Z0-9]/g, '_')
+        : 'unknown';
+      link.download = `waiver_${signerName}_${registration.event_year}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Error downloading waiver:', err);
+      setError(err instanceof Error ? err.message : 'Failed to download waiver');
+    } finally {
+      setDownloadingWaiverId(null);
+    }
   };
 
   const handleBulkVerify = async () => {
@@ -1155,116 +1206,184 @@ export const RegistrationsList: FC = () => {
         </Card>
       )}
 
-      {/* Registrations Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle>All Registrations ({registrations.length})</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {isLoading ? (
-            <div className="text-center py-8 text-white">
-              <RefreshCw className="h-6 w-6 animate-spin mx-auto mb-2" />
-              Loading registrations...
-            </div>
-          ) : registrations.length === 0 ? (
-            <div className="text-center py-8 text-white">
-              {error
-                ? 'Failed to load registrations.'
-                : adminConfigured
-                ? 'No registrations found.'
-                : 'No registrations visible. Configure the service role key to bypass RLS.'}
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-white/20">
-                    <th className="text-left py-3 px-4 font-semibold text-white">
-                      Name
-                    </th>
-                    <th className="text-left py-3 px-4 font-semibold text-white">
-                      Email
-                    </th>
-                    <th className="text-left py-3 px-4 font-semibold text-white">
-                      Club
-                    </th>
-                    <th className="text-left py-3 px-4 font-semibold text-white">
-                      Year
-                    </th>
-                    <th className="text-left py-3 px-4 font-semibold text-white">
-                      Fee
-                    </th>
-                    <th className="text-left py-3 px-4 font-semibold text-white">
-                      Payment
-                    </th>
-                    <th className="text-left py-3 px-4 font-semibold text-white">
-                      Waiver
-                    </th>
-                    <th className="text-left py-3 px-4 font-semibold text-white">
-                      Registered
-                    </th>
-                    <th className="text-right py-3 px-4 font-semibold text-white">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {registrations.map((registration) => (
-                    <tr
-                      key={registration.id}
-                      className="border-b border-white/10 hover:bg-white/5 transition-colors cursor-pointer"
-                      onClick={() => handleViewRegistration(registration)}
-                    >
-                      <td className="py-3 px-4">
-                        <p className="font-medium text-white">
-                          {registration.first_name && registration.last_name
-                            ? `${registration.first_name} ${registration.last_name}`
-                            : <span className="text-white/50">Unknown User</span>}
-                        </p>
-                      </td>
-                      <td className="py-3 px-4 text-white/70 text-sm">
-                        {registration.email || <span className="text-white/30">—</span>}
-                      </td>
-                      <td className="py-3 px-4 text-white/90">
-                        {registration.club || 'N/A'}
-                      </td>
-                      <td className="py-3 px-4 text-white/90">
-                        {registration.event_year}
-                      </td>
-                      <td className="py-3 px-4 text-white/90">
-                        {formatCurrency(registration.registration_fee)}
-                      </td>
-                      <td className="py-3 px-4">
-                        {getPaymentBadge(registration.payment_status)}
-                      </td>
-                      <td className="py-3 px-4">
+      {/* Registrations Table with Tabs */}
+      {(() => {
+        // Filter registrations based on active tab
+        const paidRegistrations = registrations.filter(r => r.registration_fee > 0);
+        const spectatorRegistrations = registrations.filter(r => r.registration_fee === 0);
+
+        const getFilteredRegistrations = () => {
+          switch (activeTab) {
+            case 'paid':
+              return paidRegistrations;
+            case 'spectators':
+              return spectatorRegistrations;
+            default:
+              return registrations;
+          }
+        };
+
+        const filteredRegistrations = getFilteredRegistrations();
+
+        const renderTable = (regs: RegistrationWithProfile[]) => (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-white/20">
+                  <th className="text-left py-3 px-4 font-semibold text-white">
+                    Name
+                  </th>
+                  <th className="text-left py-3 px-4 font-semibold text-white">
+                    Email
+                  </th>
+                  <th className="text-left py-3 px-4 font-semibold text-white">
+                    Club
+                  </th>
+                  <th className="text-left py-3 px-4 font-semibold text-white">
+                    Year
+                  </th>
+                  <th className="text-left py-3 px-4 font-semibold text-white">
+                    Fee
+                  </th>
+                  <th className="text-left py-3 px-4 font-semibold text-white">
+                    Payment
+                  </th>
+                  <th className="text-left py-3 px-4 font-semibold text-white">
+                    Waiver
+                  </th>
+                  <th className="text-left py-3 px-4 font-semibold text-white">
+                    Registered
+                  </th>
+                  <th className="text-right py-3 px-4 font-semibold text-white">
+                    Actions
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {regs.map((registration) => (
+                  <tr
+                    key={registration.id}
+                    className="border-b border-white/10 hover:bg-white/5 transition-colors cursor-pointer"
+                    onClick={() => handleViewRegistration(registration)}
+                  >
+                    <td className="py-3 px-4">
+                      <p className="font-medium text-white">
+                        {registration.first_name && registration.last_name
+                          ? `${registration.first_name} ${registration.last_name}`
+                          : <span className="text-white/50">Unknown User</span>}
+                      </p>
+                    </td>
+                    <td className="py-3 px-4 text-white/70 text-sm">
+                      {registration.email || <span className="text-white/30">—</span>}
+                    </td>
+                    <td className="py-3 px-4 text-white/90">
+                      {registration.club || 'N/A'}
+                    </td>
+                    <td className="py-3 px-4 text-white/90">
+                      {registration.event_year}
+                    </td>
+                    <td className="py-3 px-4 text-white/90">
+                      {formatCurrency(registration.registration_fee)}
+                    </td>
+                    <td className="py-3 px-4">
+                      {getPaymentBadge(registration.payment_status)}
+                    </td>
+                    <td className="py-3 px-4">
+                      <div className="flex items-center gap-2">
                         {getWaiverBadge(registration.waiver)}
-                      </td>
-                      <td className="py-3 px-4 text-white/90">
-                        {formatDate(registration.registered_at || registration.created_at)}
-                      </td>
-                      <td className="py-3 px-4">
-                        <div className="flex items-center justify-end gap-2">
+                        {registration.waiver.status === 'signed' && registration.waiver.boldsignDocumentId && (
                           <Button
                             variant="ghost"
                             size="sm"
+                            className="h-6 w-6 p-0"
+                            title="Download signed waiver"
+                            disabled={downloadingWaiverId === registration.waiver.waiverSigningId}
                             onClick={(e) => {
                               e.stopPropagation();
-                              handleViewRegistration(registration);
+                              handleDownloadWaiver(registration);
                             }}
                           >
-                            <Eye className="h-4 w-4" />
+                            {downloadingWaiverId === registration.waiver.waiverSigningId ? (
+                              <RefreshCw className="h-3 w-3 animate-spin" />
+                            ) : (
+                              <Download className="h-3 w-3" />
+                            )}
                           </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+                        )}
+                      </div>
+                    </td>
+                    <td className="py-3 px-4 text-white/90">
+                      {formatDate(registration.registered_at || registration.created_at)}
+                    </td>
+                    <td className="py-3 px-4">
+                      <div className="flex items-center justify-end gap-2">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleViewRegistration(registration);
+                          }}
+                        >
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        );
+
+        return (
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle>Registrations</CardTitle>
+                <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)}>
+                  <TabsList>
+                    <TabsTrigger value="all" className="gap-2">
+                      <Users className="h-4 w-4" />
+                      All ({registrations.length})
+                    </TabsTrigger>
+                    <TabsTrigger value="paid" className="gap-2">
+                      <Ticket className="h-4 w-4" />
+                      Event Registrations ({paidRegistrations.length})
+                    </TabsTrigger>
+                    <TabsTrigger value="spectators" className="gap-2">
+                      <Eye className="h-4 w-4" />
+                      Spectators ({spectatorRegistrations.length})
+                    </TabsTrigger>
+                  </TabsList>
+                </Tabs>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {isLoading ? (
+                <div className="text-center py-8 text-white">
+                  <RefreshCw className="h-6 w-6 animate-spin mx-auto mb-2" />
+                  Loading registrations...
+                </div>
+              ) : filteredRegistrations.length === 0 ? (
+                <div className="text-center py-8 text-white">
+                  {error
+                    ? 'Failed to load registrations.'
+                    : adminConfigured
+                    ? activeTab === 'all'
+                      ? 'No registrations found.'
+                      : activeTab === 'paid'
+                      ? 'No paid event registrations found.'
+                      : 'No spectator registrations found.'
+                    : 'No registrations visible. Configure the service role key to bypass RLS.'}
+                </div>
+              ) : (
+                renderTable(filteredRegistrations)
+              )}
+            </CardContent>
+          </Card>
+        );
+      })()}
 
       {/* Registration Detail Modal */}
       <RegistrationDetailModal
