@@ -1369,12 +1369,12 @@ export async function removeEventRegistration(
     // Use admin client to bypass RLS for admin operations
     const adminClient = getAdminClient();
 
-    // Get the order item and order info for refund
+    // Get the order item and order info for refund (may not exist for manual/free registrations)
     const { data: orderItem } = await adminClient
       .from('order_items')
       .select('order_id, total')
       .eq('event_registration_id', registrationId)
-      .single();
+      .maybeSingle();
 
     let paymentIntentId: string | undefined;
     if (refund && orderItem?.order_id) {

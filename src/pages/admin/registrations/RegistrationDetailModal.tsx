@@ -76,6 +76,7 @@ interface RemoveDialogState {
 interface RegistrationDetailModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onRefresh?: () => void;
   registration: {
     id: string;
     user_id: string;
@@ -93,6 +94,7 @@ interface RegistrationDetailModalProps {
 export const RegistrationDetailModal: FC<RegistrationDetailModalProps> = ({
   open,
   onOpenChange,
+  onRefresh,
   registration,
 }) => {
   const [tournaments, setTournaments] = useState<TournamentPurchase[]>([]);
@@ -276,7 +278,17 @@ export const RegistrationDetailModal: FC<RegistrationDetailModalProps> = ({
         setRemoveError(`Item removed but refund failed: ${result.refundResult.error}`);
       }
 
-      // Refresh the data
+      // Refresh the parent list data
+      onRefresh?.();
+
+      // For registration deletion, close the modal since the registration no longer exists
+      if (removeDialog.type === 'registration') {
+        closeRemoveDialog();
+        onOpenChange(false);
+        return;
+      }
+
+      // Refresh the modal data for other item types
       await fetchPurchaseDetails();
       closeRemoveDialog();
     } catch (err) {

@@ -1389,6 +1389,7 @@ export const RegistrationsList: FC = () => {
       <RegistrationDetailModal
         open={isModalOpen}
         onOpenChange={setIsModalOpen}
+        onRefresh={fetchRegistrations}
         registration={selectedRegistration}
       />
 
