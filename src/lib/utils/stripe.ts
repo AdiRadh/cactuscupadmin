@@ -1,4 +1,4 @@
-import { supabase } from '@/lib/supabase';
+import { supabase, getAdminClient } from '@/lib/api/supabase';
 import { isCurrentlyBetween } from './dateUtils';
 
 export interface CreateStripeProductRequest {
@@ -1199,15 +1199,18 @@ export async function removeTournamentRegistration(
   paymentIntentId?: string
 ): Promise<RemoveItemResult> {
   try {
+    // Use admin client to bypass RLS for admin operations
+    const adminClient = getAdminClient();
+
     // First, get the order_id associated with this tournament registration
-    const { data: orderItem, error: orderItemError } = await supabase
+    const { data: orderItem, error: orderItemError } = await adminClient
       .from('order_items')
       .select('order_id, total')
       .eq('tournament_registration_id', registrationId)
       .single();
 
     // Delete the tournament registration
-    const { error: deleteError } = await supabase
+    const { error: deleteError } = await adminClient
       .from('tournament_registrations')
       .delete()
       .eq('id', registrationId);
@@ -1217,20 +1220,20 @@ export async function removeTournamentRegistration(
     }
 
     // Update tournament current_registrations count (decrement)
-    const { error: updateError } = await supabase.rpc('decrement_tournament_registrations', {
+    const { error: updateError } = await adminClient.rpc('decrement_tournament_registrations', {
       tournament_id: tournamentId,
     });
 
     // If RPC doesn't exist, try direct update
     if (updateError) {
-      const { data: tournament } = await supabase
+      const { data: tournament } = await adminClient
         .from('tournaments')
         .select('current_registrations')
         .eq('id', tournamentId)
         .single();
 
       if (tournament && tournament.current_registrations > 0) {
-        await supabase
+        await adminClient
           .from('tournaments')
           .update({ current_registrations: tournament.current_registrations - 1 })
           .eq('id', tournamentId);
@@ -1239,7 +1242,7 @@ export async function removeTournamentRegistration(
 
     // Delete the order item if it exists
     if (orderItem && !orderItemError) {
-      await supabase
+      await adminClient
         .from('order_items')
         .delete()
         .eq('tournament_registration_id', registrationId);
@@ -1280,12 +1283,15 @@ export async function removeOrderItem(
   orderId?: string
 ): Promise<RemoveItemResult> {
   try {
+    // Use admin client to bypass RLS for admin operations
+    const adminClient = getAdminClient();
+
     // Get order info for refund
     let paymentIntentId: string | undefined;
     let itemTotal: number | undefined;
 
     if (refund && orderId) {
-      const { data: order } = await supabase
+      const { data: order } = await adminClient
         .from('orders')
         .select('stripe_payment_intent_id')
         .eq('id', orderId)
@@ -1295,7 +1301,7 @@ export async function removeOrderItem(
     }
 
     // Get the item total before deleting
-    const { data: orderItem } = await supabase
+    const { data: orderItem } = await adminClient
       .from('order_items')
       .select('total')
       .eq('id', orderItemId)
@@ -1304,7 +1310,7 @@ export async function removeOrderItem(
     itemTotal = orderItem?.total || undefined;
 
     // Delete the order item
-    const { error: deleteError } = await supabase
+    const { error: deleteError } = await adminClient
       .from('order_items')
       .delete()
       .eq('id', orderItemId);
@@ -1315,14 +1321,14 @@ export async function removeOrderItem(
 
     // Update addon inventory (increment stock back)
     if (addonId) {
-      const { data: addon } = await supabase
+      const { data: addon } = await adminClient
         .from('addons')
         .select('has_inventory, stock_quantity')
         .eq('id', addonId)
         .single();
 
       if (addon?.has_inventory && addon.stock_quantity !== null) {
-        await supabase
+        await adminClient
           .from('addons')
           .update({ stock_quantity: addon.stock_quantity + quantity })
           .eq('id', addonId);
@@ -1360,8 +1366,11 @@ export async function removeEventRegistration(
   refund: boolean = false
 ): Promise<RemoveItemResult> {
   try {
+    // Use admin client to bypass RLS for admin operations
+    const adminClient = getAdminClient();
+
     // Get the order item and order info for refund
-    const { data: orderItem } = await supabase
+    const { data: orderItem } = await adminClient
       .from('order_items')
       .select('order_id, total')
       .eq('event_registration_id', registrationId)
@@ -1369,7 +1378,7 @@ export async function removeEventRegistration(
 
     let paymentIntentId: string | undefined;
     if (refund && orderItem?.order_id) {
-      const { data: order } = await supabase
+      const { data: order } = await adminClient
         .from('orders')
         .select('stripe_payment_intent_id')
         .eq('id', orderItem.order_id)
@@ -1380,14 +1389,14 @@ export async function removeEventRegistration(
 
     // Delete the order item first
     if (orderItem) {
-      await supabase
+      await adminClient
         .from('order_items')
         .delete()
         .eq('event_registration_id', registrationId);
     }
 
     // Delete the event registration
-    const { error: deleteError } = await supabase
+    const { error: deleteError } = await adminClient
       .from('event_registrations')
       .delete()
       .eq('id', registrationId);
