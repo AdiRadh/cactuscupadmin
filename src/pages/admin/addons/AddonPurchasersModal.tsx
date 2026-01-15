@@ -8,7 +8,8 @@ import {
   DialogDescription,
 } from '@/components/ui/Dialog';
 import { Badge } from '@/components/ui';
-import { Loader2, User, Package, ShoppingBag } from 'lucide-react';
+import { Loader2, User, Package, ShoppingBag, Download } from 'lucide-react';
+import { Button } from '@/components/ui/Button';
 import { supabaseAdmin, supabase } from '@/lib/api/supabase';
 import { formatPrice } from '@/lib/utils/formatting';
 import type { Addon } from '@/types';
@@ -168,6 +169,35 @@ export const AddonPurchasersModal: FC<AddonPurchasersModalProps> = ({
     }
   };
 
+  const handleExportCSV = () => {
+    if (!addon || purchasers.length === 0) return;
+
+    const headers = ['Name', 'Club', 'Variant', 'Quantity', 'Unit Price', 'Total', 'Order Number', 'Order Status', 'Purchase Date'];
+    const rows = purchasers.map(p => [
+      p.firstName && p.lastName ? `${p.firstName} ${p.lastName}` : 'Unknown',
+      p.club || '',
+      p.variantName || '',
+      String(p.quantity),
+      p.unitPrice ? (p.unitPrice / 100).toFixed(2) : '',
+      p.total ? (p.total / 100).toFixed(2) : '',
+      p.orderNumber || '',
+      p.orderStatus || '',
+      p.purchasedAt ? new Date(p.purchasedAt).toISOString() : '',
+    ]);
+
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(row => row.map(cell => `"${(cell || '').replace(/"/g, '""')}"`).join(',')),
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `${addon.name.replace(/[^a-z0-9]/gi, '_')}_purchasers.csv`;
+    link.click();
+    URL.revokeObjectURL(link.href);
+  };
+
   // Calculate totals
   const totalQuantity = purchasers.reduce((sum, p) => sum + p.quantity, 0);
   const totalRevenue = purchasers.reduce((sum, p) => sum + (p.total || 0), 0);
@@ -213,6 +243,21 @@ export const AddonPurchasersModal: FC<AddonPurchasersModalProps> = ({
                 <p className="text-2xl font-bold text-green-400 mt-1">{formatPrice(totalRevenue)}</p>
               </div>
             </div>
+
+            {/* Export Button */}
+            {purchasers.length > 0 && (
+              <div className="flex justify-end">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleExportCSV}
+                  className="border-slate-600 text-white hover:bg-slate-700"
+                >
+                  <Download className="h-4 w-4 mr-2" />
+                  Export CSV
+                </Button>
+              </div>
+            )}
 
             {/* Purchasers List */}
             {purchasers.length === 0 ? (
