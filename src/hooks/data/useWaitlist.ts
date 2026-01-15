@@ -498,7 +498,8 @@ export function useWaitlist(): UseWaitlistReturn {
             continue;
           }
 
-          const tournament = entry.tournaments as { id: string; name: string; registration_fee: number } | null;
+          const tournamentsData = entry.tournaments as { id: string; name: string; registration_fee: number }[] | { id: string; name: string; registration_fee: number } | null;
+          const tournament = Array.isArray(tournamentsData) ? tournamentsData[0] : tournamentsData;
           if (!tournament) {
             continue;
           }
