@@ -248,7 +248,7 @@ export const SpecialEventForm: FC<SpecialEventFormProps> = ({
           <CardTitle>Hero Section</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <Label htmlFor="title">
                 Title <span className="text-red-500">*</span>
@@ -282,7 +282,7 @@ export const SpecialEventForm: FC<SpecialEventFormProps> = ({
             </div>
           </div>
 
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <Label htmlFor="subtitle">Subtitle</Label>
               <Input
@@ -357,7 +357,7 @@ export const SpecialEventForm: FC<SpecialEventFormProps> = ({
             )}
           </div>
 
-          <div className="grid gap-4 md:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <div>
               <Label htmlFor="date">
                 Date <span className="text-red-500">*</span>
@@ -395,7 +395,7 @@ export const SpecialEventForm: FC<SpecialEventFormProps> = ({
             </div>
           </div>
 
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <Label htmlFor="venue">
                 Venue <span className="text-red-500">*</span>
@@ -447,7 +447,7 @@ export const SpecialEventForm: FC<SpecialEventFormProps> = ({
             />
           </div>
 
-          <div className="grid gap-4 md:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <div>
               <Label htmlFor="city">City</Label>
               <Input
@@ -565,7 +565,7 @@ export const SpecialEventForm: FC<SpecialEventFormProps> = ({
           <CardTitle>Pricing</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <Label htmlFor="ticketPrice">Ticket Price ($)</Label>
               <Input
@@ -652,7 +652,7 @@ export const SpecialEventForm: FC<SpecialEventFormProps> = ({
             </p>
           </div>
 
-          <div className="grid gap-4 md:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <div>
               <Label htmlFor="earlyBirdTicketPrice">Early Bird Price ($)</Label>
               <Input
@@ -726,7 +726,7 @@ export const SpecialEventForm: FC<SpecialEventFormProps> = ({
             </p>
           </div>
 
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <Label htmlFor="registerButtonText">Button Text</Label>
               <Input
@@ -785,7 +785,7 @@ export const SpecialEventForm: FC<SpecialEventFormProps> = ({
             </p>
           </div>
 
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <Label htmlFor="registrationOpensAt">Registration Opens At</Label>
               <Input

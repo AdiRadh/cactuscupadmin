@@ -112,6 +112,26 @@
     backdrop-filter: blur(10px);
     border: 1px solid rgba(20, 184, 166, 0.3);
   }
+
+  /* Mobile utility classes */
+  .mobile-only {
+    @apply block sm:hidden;
+  }
+
+  .desktop-only {
+    @apply hidden sm:block;
+  }
+
+  .touch-target {
+    @apply min-h-[44px] min-w-[44px];
+  }
+}
+
+/* Prevent horizontal scroll on mobile */
+@media (max-width: 639px) {
+  body {
+    overflow-x: hidden;
+  }
 }
 
 /* Accessibility Utilities */
@@ -175,5 +195,3 @@
     transition-duration: 0.01ms !important;
   }
 }
-
-/* Cache bust Wed, Nov  5, 2025 10:19:31 AM */

@@ -167,7 +167,7 @@ export const GuestInstructorForm: FC<GuestInstructorFormProps> = ({
             />
           </div>
 
-          <div className="grid gap-4 md:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <div>
               <Label htmlFor="socialInstagram">Instagram</Label>
               <Input
@@ -207,7 +207,7 @@ export const GuestInstructorForm: FC<GuestInstructorFormProps> = ({
           <CardTitle>Display Settings</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <Label htmlFor="displayOrder">Display Order</Label>
               <Input

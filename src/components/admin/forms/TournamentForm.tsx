@@ -169,7 +169,7 @@ export const TournamentForm: FC<TournamentFormProps> = ({
           <CardTitle>Basic Information</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <Label htmlFor="name">
                 Tournament Name <span className="text-red-500">*</span>
@@ -203,7 +203,7 @@ export const TournamentForm: FC<TournamentFormProps> = ({
             </div>
           </div>
 
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <Label htmlFor="weapon">Weapon Type <span className="text-red-500">*</span></Label>
               <NativeSelect
@@ -255,7 +255,7 @@ export const TournamentForm: FC<TournamentFormProps> = ({
           <CardTitle>Schedule & Location</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <div>
               <Label htmlFor="date">Date <span className="text-red-500">*</span></Label>
               <Input
@@ -317,7 +317,7 @@ export const TournamentForm: FC<TournamentFormProps> = ({
           <CardTitle>Registration Settings</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <div>
               <Label htmlFor="maxParticipants">
                 Max Participants <span className="text-red-500">*</span>
@@ -392,7 +392,7 @@ export const TournamentForm: FC<TournamentFormProps> = ({
             </p>
           </div>
 
-          <div className="grid gap-4 md:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <div>
               <Label htmlFor="earlyBirdPrice">Early Bird Price ($)</Label>
               <Input

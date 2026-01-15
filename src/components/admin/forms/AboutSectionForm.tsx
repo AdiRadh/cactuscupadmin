@@ -91,7 +91,7 @@ export const AboutSectionForm: FC<AboutSectionFormProps> = ({
             <Textarea id="content" value={formData.content} onChange={(e) => handleChange('content', e.target.value)} rows={6} className={errors.content ? 'border-red-500' : ''} />
             {errors.content && <p className="text-sm text-red-600 mt-1">{errors.content}</p>}
           </div>
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-4 sm:grid-cols-2">
             <div><Label htmlFor="displayOrder">Display Order</Label><Input id="displayOrder" type="number" min="0" value={formData.displayOrder} onChange={(e) => handleChange('displayOrder', parseInt(e.target.value) || 0)} /></div>
             <div className="flex items-center space-x-2 pt-8"><input type="checkbox" id="isPublished" checked={formData.isPublished} onChange={(e) => handleChange('isPublished', e.target.checked)} className="rounded border-gray-300" /><Label htmlFor="isPublished">Published</Label></div>
           </div>

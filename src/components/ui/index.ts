@@ -43,3 +43,6 @@ export {
 
 export { Skeleton } from './Skeleton';
 export type { SkeletonProps } from './Skeleton';
+
+export { ResponsiveTable } from './ResponsiveTable';
+export type { ResponsiveTableProps, Column } from './ResponsiveTable';

@@ -135,16 +135,16 @@ export const AdminDashboard: FC = () => {
   };
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6 sm:space-y-8">
       <div>
-        <h1 className="text-3xl font-viking text-white">Dashboard</h1>
+        <h1 className="text-2xl sm:text-3xl font-viking text-white">Dashboard</h1>
         <p className="text-orange-200 mt-2">
           Welcome to the Cactus Cup admin panel
         </p>
       </div>
 
       {/* Stats Grid */}
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:gap-6 grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">
@@ -207,7 +207,7 @@ export const AdminDashboard: FC = () => {
       </div>
 
       {/* Recent Activity */}
-      <div className="grid gap-6 md:grid-cols-2">
+      <div className="grid gap-4 sm:gap-6 md:grid-cols-2">
         <Card>
           <CardHeader>
             <CardTitle>Recent Registrations</CardTitle>

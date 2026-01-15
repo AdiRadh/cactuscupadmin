@@ -347,7 +347,7 @@ export const SiteSettingsForm: FC<SiteSettingsFormProps> = ({
       <Card>
         <CardHeader><CardTitle>General Settings</CardTitle></CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-4 sm:grid-cols-2">
             <div><Label htmlFor="siteName">Site Name</Label><Input id="siteName" value={formData.siteName} onChange={(e) => handleChange('siteName', e.target.value)} /></div>
             <div><Label htmlFor="eventYear">Event Year</Label><Input id="eventYear" value={formData.eventYear} onChange={(e) => handleChange('eventYear', e.target.value)} /></div>
           </div>
@@ -510,7 +510,7 @@ export const SiteSettingsForm: FC<SiteSettingsFormProps> = ({
       <Card>
         <CardHeader><CardTitle>Contact Information</CardTitle></CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-4 sm:grid-cols-2">
             <div><Label htmlFor="contactEmail">Contact Email</Label><Input id="contactEmail" type="email" value={formData.contactEmail} onChange={(e) => handleChange('contactEmail', e.target.value)} /></div>
             <div><Label htmlFor="contactPhone">Contact Phone</Label><Input id="contactPhone" value={formData.contactPhone} onChange={(e) => handleChange('contactPhone', e.target.value)} /></div>
           </div>
@@ -796,7 +796,7 @@ export const SiteSettingsForm: FC<SiteSettingsFormProps> = ({
       <Card>
         <CardHeader><CardTitle>Social Media</CardTitle></CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-4 sm:grid-cols-2">
             <div><Label htmlFor="socialFacebook">Facebook URL</Label><Input id="socialFacebook" value={formData.socialFacebook} onChange={(e) => handleChange('socialFacebook', e.target.value)} /></div>
             <div><Label htmlFor="socialInstagram">Instagram URL</Label><Input id="socialInstagram" value={formData.socialInstagram} onChange={(e) => handleChange('socialInstagram', e.target.value)} /></div>
             <div><Label htmlFor="socialTwitter">Twitter/X URL</Label><Input id="socialTwitter" value={formData.socialTwitter} onChange={(e) => handleChange('socialTwitter', e.target.value)} /></div>

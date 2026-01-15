@@ -95,11 +95,11 @@ export const OrganizerForm: FC<OrganizerFormProps> = ({
       <Card>
         <CardHeader><CardTitle>Contact Information</CardTitle></CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-4 sm:grid-cols-2">
             <div><Label htmlFor="email">Email</Label><Input id="email" type="email" value={formData.email} onChange={(e) => handleChange('email', e.target.value)} /></div>
             <div><Label htmlFor="phone">Phone</Label><Input id="phone" value={formData.phone} onChange={(e) => handleChange('phone', e.target.value)} /></div>
           </div>
-          <div className="grid gap-4 md:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <div><Label htmlFor="socialInstagram">Instagram</Label><Input id="socialInstagram" value={formData.socialInstagram} onChange={(e) => handleChange('socialInstagram', e.target.value)} /></div>
             <div><Label htmlFor="socialFacebook">Facebook</Label><Input id="socialFacebook" value={formData.socialFacebook} onChange={(e) => handleChange('socialFacebook', e.target.value)} /></div>
             <div><Label htmlFor="socialYoutube">YouTube</Label><Input id="socialYoutube" value={formData.socialYoutube} onChange={(e) => handleChange('socialYoutube', e.target.value)} /></div>

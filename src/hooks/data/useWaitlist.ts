@@ -1,6 +1,13 @@
 import { useCallback } from 'react';
 import { supabaseAdmin, supabase } from '@/lib/api/supabase';
-import type { WaitlistEntry, WaitlistStatus } from '@/types';
+import type {
+  WaitlistEntry,
+  WaitlistStatus,
+  WaitlistInvoice,
+  InvoiceCalculation,
+  SendInvoicesRequest,
+  SendInvoicesResponse,
+} from '@/types';
 
 interface DbWaitlistEntry {
   id: string;
@@ -13,14 +20,63 @@ interface DbWaitlistEntry {
   last_name: string;
   status: string;
   promoted_at: string | null;
+  invoice_sent_at: string | null;
+  confirmed_at: string | null;
   created_at: string;
   updated_at: string;
+}
+
+interface DbWaitlistInvoice {
+  id: string;
+  waitlist_entry_id: string;
+  user_id: string;
+  tournament_id: string;
+  stripe_invoice_id: string;
+  stripe_customer_id: string;
+  stripe_hosted_invoice_url: string | null;
+  tournament_fee: number;
+  event_registration_fee: number;
+  total_amount: number;
+  status: string;
+  due_date: string;
+  created_at: string;
+  sent_at: string | null;
+  paid_at: string | null;
+  voided_at: string | null;
+  expired_at: string | null;
+  includes_event_registration: boolean;
 }
 
 interface WaitlistWithTournament extends DbWaitlistEntry {
   tournaments: {
     name: string;
   } | null;
+}
+
+/**
+ * Convert database waitlist invoice to domain model
+ */
+function dbToWaitlistInvoice(db: DbWaitlistInvoice): WaitlistInvoice {
+  return {
+    id: db.id,
+    waitlistEntryId: db.waitlist_entry_id,
+    userId: db.user_id,
+    tournamentId: db.tournament_id,
+    stripeInvoiceId: db.stripe_invoice_id,
+    stripeCustomerId: db.stripe_customer_id,
+    stripeHostedInvoiceUrl: db.stripe_hosted_invoice_url,
+    tournamentFee: db.tournament_fee,
+    eventRegistrationFee: db.event_registration_fee,
+    totalAmount: db.total_amount,
+    status: db.status as WaitlistInvoice['status'],
+    dueDate: db.due_date,
+    createdAt: db.created_at,
+    sentAt: db.sent_at,
+    paidAt: db.paid_at,
+    voidedAt: db.voided_at,
+    expiredAt: db.expired_at,
+    includesEventRegistration: db.includes_event_registration,
+  };
 }
 
 /**
@@ -38,6 +94,8 @@ function dbToWaitlistEntry(db: WaitlistWithTournament): WaitlistEntry {
     lastName: db.last_name,
     status: db.status as WaitlistStatus,
     promotedAt: db.promoted_at,
+    invoiceSentAt: db.invoice_sent_at,
+    confirmedAt: db.confirmed_at,
     createdAt: db.created_at,
     updatedAt: db.updated_at,
     tournamentName: db.tournaments?.name,
@@ -58,6 +116,23 @@ export interface RegisteredUser {
   firstName: string;
   lastName: string;
   fullName: string;
+}
+
+/**
+ * Result of a waitlist promotion attempt
+ */
+export interface PromotionResult {
+  success: boolean;
+  needsConfirmation?: boolean;
+  warning?: string;
+  capIncreased?: boolean;
+  error?: string;
+  currentParticipants?: number;
+  maxParticipants?: number;
+  reservedParticipants?: number;
+  entryId?: string;
+  userId?: string;
+  tournamentId?: string;
 }
 
 export interface UseWaitlistReturn {
@@ -93,6 +168,28 @@ export interface UseWaitlistReturn {
    * Get all registered users for the searchable dropdown
    */
   getRegisteredUsers: () => Promise<RegisteredUser[]>;
+
+  /**
+   * Promote a waitlist user with capacity checking
+   * If tournament is at capacity and bypassCapacity is false, returns needsConfirmation: true
+   * If bypassCapacity is true, will auto-increase max_participants
+   */
+  promoteWaitlistUser: (entryId: string, bypassCapacity?: boolean) => Promise<PromotionResult>;
+
+  /**
+   * Calculate invoice amounts for promoted waitlist entries
+   */
+  calculateInvoices: (entryIds: string[]) => Promise<InvoiceCalculation[]>;
+
+  /**
+   * Send invoices to promoted waitlist entries
+   */
+  sendInvoices: (request: SendInvoicesRequest) => Promise<SendInvoicesResponse>;
+
+  /**
+   * Get invoice for a waitlist entry
+   */
+  getInvoiceForEntry: (entryId: string) => Promise<WaitlistInvoice | null>;
 }
 
 /**
@@ -323,6 +420,203 @@ export function useWaitlist(): UseWaitlistReturn {
       .filter((user) => user.email); // Only return users with emails
   }, [client]);
 
+  const promoteWaitlistUser = useCallback(
+    async (entryId: string, bypassCapacity: boolean = false): Promise<PromotionResult> => {
+      try {
+        const { data, error } = await client.rpc('promote_waitlist_user', {
+          p_waitlist_entry_id: entryId,
+          p_bypass_capacity: bypassCapacity,
+        });
+
+        if (error) {
+          console.error('Error promoting waitlist user:', error);
+          return { success: false, error: error.message };
+        }
+
+        // The RPC returns a JSON object with the result
+        return data as PromotionResult;
+      } catch (err) {
+        console.error('Error promoting waitlist user:', err);
+        return {
+          success: false,
+          error: err instanceof Error ? err.message : 'Unknown error occurred',
+        };
+      }
+    },
+    [client]
+  );
+
+  const calculateInvoices = useCallback(
+    async (entryIds: string[]): Promise<InvoiceCalculation[]> => {
+      const calculations: InvoiceCalculation[] = [];
+
+      // Get site settings for event registration fee
+      const { data: settings } = await client
+        .from('site_settings')
+        .select('setting_key, setting_value')
+        .in('setting_key', ['supporter_entry_fee', 'event_registration_fee']);
+
+      const settingsMap: Record<string, string> = {};
+      for (const row of settings || []) {
+        settingsMap[row.setting_key] = row.setting_value;
+      }
+
+      const eventRegFee = parseInt(
+        settingsMap['supporter_entry_fee'] || settingsMap['event_registration_fee'] || '5000',
+        10
+      );
+
+      for (const entryId of entryIds) {
+        try {
+          // Fetch entry with tournament info
+          const { data: entry, error: entryError } = await client
+            .from('tournament_waitlist')
+            .select(`
+              id,
+              user_id,
+              email,
+              first_name,
+              last_name,
+              tournament_id,
+              status,
+              tournaments:tournament_id (
+                id,
+                name,
+                registration_fee
+              )
+            `)
+            .eq('id', entryId)
+            .single();
+
+          if (entryError || !entry) {
+            console.error(`Error fetching entry ${entryId}:`, entryError);
+            continue;
+          }
+
+          // Only calculate for promoted entries
+          if (entry.status !== 'promoted') {
+            continue;
+          }
+
+          const tournament = entry.tournaments as { id: string; name: string; registration_fee: number } | null;
+          if (!tournament) {
+            continue;
+          }
+
+          // Check if user has event registration
+          const { data: eventReg } = await client
+            .from('event_registrations')
+            .select('id')
+            .eq('user_id', entry.user_id)
+            .eq('event_year', 2026)
+            .eq('payment_status', 'completed')
+            .maybeSingle();
+
+          const needsEventReg = !eventReg;
+          const eventFee = needsEventReg ? eventRegFee : 0;
+
+          calculations.push({
+            waitlistEntryId: entry.id,
+            userId: entry.user_id,
+            email: entry.email,
+            firstName: entry.first_name,
+            lastName: entry.last_name,
+            tournamentId: tournament.id,
+            tournamentName: tournament.name,
+            tournamentFee: tournament.registration_fee,
+            needsEventRegistration: needsEventReg,
+            eventRegistrationFee: eventFee,
+            totalAmount: tournament.registration_fee + eventFee,
+          });
+        } catch (err) {
+          console.error(`Error calculating invoice for ${entryId}:`, err);
+        }
+      }
+
+      return calculations;
+    },
+    [client]
+  );
+
+  const sendInvoices = useCallback(
+    async (request: SendInvoicesRequest): Promise<SendInvoicesResponse> => {
+      try {
+        // Get the current session for authorization
+        const { data: sessionData } = await client.auth.getSession();
+        const accessToken = sessionData?.session?.access_token;
+
+        if (!accessToken) {
+          return {
+            success: false,
+            results: [],
+            totalSent: 0,
+            totalFailed: request.waitlistEntryIds.length,
+          };
+        }
+
+        // Call the edge function
+        const response = await fetch(
+          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-waitlist-invoices`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${accessToken}`,
+            },
+            body: JSON.stringify(request),
+          }
+        );
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          console.error('Error sending invoices:', data);
+          return {
+            success: false,
+            results: data.results || [],
+            totalSent: data.totalSent || 0,
+            totalFailed: data.totalFailed || request.waitlistEntryIds.length,
+          };
+        }
+
+        return data as SendInvoicesResponse;
+      } catch (err) {
+        console.error('Error sending invoices:', err);
+        return {
+          success: false,
+          results: [],
+          totalSent: 0,
+          totalFailed: request.waitlistEntryIds.length,
+        };
+      }
+    },
+    [client]
+  );
+
+  const getInvoiceForEntry = useCallback(
+    async (entryId: string): Promise<WaitlistInvoice | null> => {
+      const { data, error } = await client
+        .from('waitlist_invoices')
+        .select('*')
+        .eq('waitlist_entry_id', entryId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (error) {
+        console.error('Error fetching invoice:', error);
+        return null;
+      }
+
+      if (!data) {
+        return null;
+      }
+
+      return dbToWaitlistInvoice(data as DbWaitlistInvoice);
+    },
+    [client]
+  );
+
   return {
     getWaitlistEntries,
     createWaitlistEntry,
@@ -330,5 +624,9 @@ export function useWaitlist(): UseWaitlistReturn {
     deleteWaitlistEntry,
     getWaitlistCounts,
     getRegisteredUsers,
+    promoteWaitlistUser,
+    calculateInvoices,
+    sendInvoices,
+    getInvoiceForEntry,
   };
 }

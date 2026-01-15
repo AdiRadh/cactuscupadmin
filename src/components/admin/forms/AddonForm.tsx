@@ -117,7 +117,7 @@ export const AddonForm: FC<AddonFormProps> = ({
           <CardTitle>Basic Information</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <Label htmlFor="name">
                 Add-On Name <span className="text-red-500">*</span>
@@ -214,7 +214,7 @@ export const AddonForm: FC<AddonFormProps> = ({
           <CardTitle>Pricing & Inventory</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <Label htmlFor="price">
                 Price ($) <span className="text-red-500">*</span>

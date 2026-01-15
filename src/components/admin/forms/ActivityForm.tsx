@@ -171,7 +171,7 @@ export const ActivityForm: FC<ActivityFormProps> = ({
           <CardTitle>Basic Information</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <Label htmlFor="title">
                 Activity Title <span className="text-red-500">*</span>
@@ -205,7 +205,7 @@ export const ActivityForm: FC<ActivityFormProps> = ({
             </div>
           </div>
 
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <Label htmlFor="type">Activity Type <span className="text-red-500">*</span></Label>
               <NativeSelect
@@ -258,7 +258,7 @@ export const ActivityForm: FC<ActivityFormProps> = ({
           <CardTitle>Schedule</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <div>
               <Label htmlFor="date">Date <span className="text-red-500">*</span></Label>
               <Input
@@ -313,7 +313,7 @@ export const ActivityForm: FC<ActivityFormProps> = ({
           <CardTitle>Registration Settings</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <Label htmlFor="maxParticipants">Max Participants (Optional)</Label>
               <Input
@@ -352,7 +352,7 @@ export const ActivityForm: FC<ActivityFormProps> = ({
             </div>
           </div>
 
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <Label htmlFor="skillLevel">Skill Level</Label>
               <NativeSelect
@@ -415,7 +415,7 @@ export const ActivityForm: FC<ActivityFormProps> = ({
             </p>
           </div>
 
-          <div className="grid gap-4 md:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <div>
               <Label htmlFor="earlyBirdPrice">Early Bird Price ($)</Label>
               <Input

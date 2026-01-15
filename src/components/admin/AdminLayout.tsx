@@ -71,7 +71,7 @@ const navItems: NavItem[] = [
 export const AdminLayout: FC<AdminLayoutProps> = ({ children }) => {
   const location = useLocation();
   const navigate = useNavigate();
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const { isAdmin, isOrganizer } = useUserRole();
   const { signOut } = useAuth();
 
@@ -102,56 +102,64 @@ export const AdminLayout: FC<AdminLayoutProps> = ({ children }) => {
     <div className="min-h-screen bg-gradient-to-br from-turquoise-700 via-turquoise-600 to-turquoise-700">
       {/* Top Header */}
       <header className="bg-turquoise-800 border-b border-turquoise-600 shadow-lg">
-        <div className="flex items-center justify-between px-6 py-4">
+        <div className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4">
           <div className="flex items-center gap-4">
             <Button
               variant="ghost"
               size="icon"
               onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-              className="lg:hidden text-white hover:bg-turquoise-700"
+              className="lg:hidden text-white hover:bg-turquoise-700 min-h-[44px] min-w-[44px]"
             >
               <Menu className="h-5 w-5" />
             </Button>
             <Link to="/" className="flex items-center gap-2">
-              <h1 className="text-2xl font-viking text-white">
+              <h1 className="text-xl sm:text-2xl font-viking text-white">
                 Cactus Cup Admin
               </h1>
             </Link>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 sm:gap-4">
             <Button
               variant="ghost"
               size="sm"
-              className="text-white hover:bg-turquoise-700"
+              className="text-white hover:bg-turquoise-700 min-h-[44px]"
               onClick={handleLogout}
             >
-              <LogOut className="h-4 w-4 mr-2" />
-              Logout
+              <LogOut className="h-4 w-4 sm:mr-2" />
+              <span className="hidden sm:inline">Logout</span>
             </Button>
           </div>
         </div>
       </header>
 
       <div className="flex">
+        {/* Overlay for mobile - must be before sidebar for proper z-index stacking */}
+        {isSidebarOpen && (
+          <div
+            className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+            onClick={() => setIsSidebarOpen(false)}
+          />
+        )}
+
         {/* Sidebar */}
         <aside
           className={cn(
             'fixed lg:static inset-y-0 left-0 z-50 w-64 bg-turquoise-800 border-r border-turquoise-600 transition-transform duration-200 ease-in-out',
             isSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0',
-            'top-[73px]' // Account for header height
+            'top-[65px] sm:top-[73px]' // Account for header height (smaller on mobile)
           )}
         >
-          <nav className="p-4 space-y-2 overflow-y-auto max-h-[calc(100vh-73px)]">
+          <nav className="p-3 sm:p-4 space-y-1 sm:space-y-2 overflow-y-auto max-h-[calc(100vh-65px)] sm:max-h-[calc(100vh-73px)]">
             {filteredNavItems.map((item) => {
               const Icon = item.icon;
               const isActive = isActivePath(item.path);
 
               return (
-                <Link key={item.path} to={item.path}>
+                <Link key={item.path} to={item.path} onClick={() => setIsSidebarOpen(false)}>
                   <Button
                     variant={isActive ? 'secondary' : 'ghost'}
                     className={cn(
-                      'w-full justify-start text-white',
+                      'w-full justify-start text-white min-h-[44px]',
                       isActive && 'bg-orange-500 text-white hover:bg-orange-600',
                       !isActive && 'hover:bg-turquoise-700'
                     )}
@@ -166,20 +174,12 @@ export const AdminLayout: FC<AdminLayoutProps> = ({ children }) => {
         </aside>
 
         {/* Main Content */}
-        <main className="flex-1 p-6 lg:p-8">
+        <main className="flex-1 p-4 sm:p-6 lg:p-8">
           <div className="max-w-7xl mx-auto">
             {children}
           </div>
         </main>
       </div>
-
-      {/* Overlay for mobile */}
-      {isSidebarOpen && (
-        <div
-          className="fixed inset-0 bg-black/50 z-40 lg:hidden"
-          onClick={() => setIsSidebarOpen(false)}
-        />
-      )}
     </div>
   );
 };

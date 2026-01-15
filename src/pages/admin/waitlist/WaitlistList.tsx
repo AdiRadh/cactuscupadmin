@@ -15,6 +15,10 @@ import {
   CheckCircle,
   XCircle,
   UserPlus,
+  Send,
+  Receipt,
+  AlertCircle,
+  FileCheck,
 } from 'lucide-react';
 import { useWaitlist } from '@/hooks/data/useWaitlist';
 import type { CreateWaitlistEntryData } from '@/hooks/data/useWaitlist';
@@ -22,6 +26,7 @@ import { useAdmin } from '@/hooks/data/useAdmin';
 import type { WaitlistEntry, WaitlistStatus, Tournament } from '@/types';
 import { WaitlistEditModal } from './WaitlistEditModal';
 import { WaitlistCreateModal } from './WaitlistCreateModal';
+import { SendInvoicesDialog } from './SendInvoicesDialog';
 
 export const WaitlistList: FC = () => {
   const [entries, setEntries] = useState<WaitlistEntry[]>([]);
@@ -41,7 +46,19 @@ export const WaitlistList: FC = () => {
   // Create modal state
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
 
-  const { getWaitlistEntries, createWaitlistEntry, updateWaitlistEntry, deleteWaitlistEntry } = useWaitlist();
+  // Invoice selection state
+  const [selectedEntries, setSelectedEntries] = useState<Set<string>>(new Set());
+  const [isInvoiceDialogOpen, setIsInvoiceDialogOpen] = useState(false);
+
+  const {
+    getWaitlistEntries,
+    createWaitlistEntry,
+    updateWaitlistEntry,
+    deleteWaitlistEntry,
+    promoteWaitlistUser,
+    calculateInvoices,
+    sendInvoices,
+  } = useWaitlist();
   const { listTournaments } = useAdmin();
 
   const fetchData = useCallback(async () => {
@@ -76,9 +93,53 @@ export const WaitlistList: FC = () => {
     const total = entries.length;
     const waiting = entries.filter((e) => e.status === 'waiting').length;
     const promoted = entries.filter((e) => e.status === 'promoted').length;
+    const invoiced = entries.filter((e) => e.status === 'invoiced').length;
+    const confirmed = entries.filter((e) => e.status === 'confirmed').length;
     const cancelled = entries.filter((e) => e.status === 'cancelled').length;
-    return { total, waiting, promoted, cancelled };
+    const expired = entries.filter((e) => e.status === 'expired').length;
+    return { total, waiting, promoted, invoiced, confirmed, cancelled, expired };
   }, [entries]);
+
+  // Entries that can be invoiced (promoted status)
+  const invoiceableEntries = useMemo(() => {
+    return entries.filter((e) => e.status === 'promoted');
+  }, [entries]);
+
+  // Handle selection toggle
+  const handleToggleSelection = (entryId: string) => {
+    setSelectedEntries((prev) => {
+      const next = new Set(prev);
+      if (next.has(entryId)) {
+        next.delete(entryId);
+      } else {
+        next.add(entryId);
+      }
+      return next;
+    });
+  };
+
+  // Handle select all promoted entries
+  const handleSelectAllPromoted = () => {
+    if (selectedEntries.size === invoiceableEntries.length && invoiceableEntries.length > 0) {
+      // Deselect all
+      setSelectedEntries(new Set());
+    } else {
+      // Select all promoted entries
+      setSelectedEntries(new Set(invoiceableEntries.map((e) => e.id)));
+    }
+  };
+
+  // Handle invoice send success
+  const handleInvoiceSent = async () => {
+    setSelectedEntries(new Set());
+    await fetchData();
+  };
+
+  // Get held spots for selected tournament
+  const selectedTournamentData = useMemo(() => {
+    if (selectedTournament === 'all') return null;
+    return tournaments.find((t) => t.id === selectedTournament) || null;
+  }, [selectedTournament, tournaments]);
 
   // Handle edit
   const handleEdit = (entry: WaitlistEntry) => {
@@ -189,9 +250,23 @@ export const WaitlistList: FC = () => {
         );
       case 'promoted':
         return (
-          <Badge variant="success" className="flex items-center gap-1">
+          <Badge variant="default" className="flex items-center gap-1 bg-orange-500">
             <CheckCircle className="h-3 w-3" />
             Promoted
+          </Badge>
+        );
+      case 'invoiced':
+        return (
+          <Badge variant="default" className="flex items-center gap-1 bg-blue-500">
+            <Receipt className="h-3 w-3" />
+            Invoiced
+          </Badge>
+        );
+      case 'confirmed':
+        return (
+          <Badge variant="success" className="flex items-center gap-1">
+            <FileCheck className="h-3 w-3" />
+            Confirmed
           </Badge>
         );
       case 'cancelled':
@@ -199,6 +274,13 @@ export const WaitlistList: FC = () => {
           <Badge variant="secondary" className="flex items-center gap-1">
             <XCircle className="h-3 w-3" />
             Cancelled
+          </Badge>
+        );
+      case 'expired':
+        return (
+          <Badge variant="destructive" className="flex items-center gap-1">
+            <AlertCircle className="h-3 w-3" />
+            Expired
           </Badge>
         );
       default:
@@ -215,6 +297,16 @@ export const WaitlistList: FC = () => {
           <h1 className="text-3xl font-viking text-white">Waitlist Management</h1>
         </div>
         <div className="flex items-center gap-2">
+          {selectedEntries.size > 0 && (
+            <Button
+              size="sm"
+              onClick={() => setIsInvoiceDialogOpen(true)}
+              className="bg-blue-500 hover:bg-blue-600 text-white"
+            >
+              <Send className="h-4 w-4 mr-2" />
+              Send Invoices ({selectedEntries.size})
+            </Button>
+          )}
           <Button
             variant="outline"
             size="sm"
@@ -267,23 +359,41 @@ export const WaitlistList: FC = () => {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
         <Card className="bg-slate-800 border-slate-700">
           <CardContent className="py-4 text-center">
             <p className="text-3xl font-bold text-white">{stats.total}</p>
-            <p className="text-sm text-slate-400">Total Entries</p>
+            <p className="text-sm text-slate-400">Total</p>
           </CardContent>
         </Card>
         <Card className="bg-slate-800 border-slate-700">
           <CardContent className="py-4 text-center">
-            <p className="text-3xl font-bold text-orange-400">{stats.waiting}</p>
+            <p className="text-3xl font-bold text-yellow-400">{stats.waiting}</p>
             <p className="text-sm text-slate-400">Waiting</p>
           </CardContent>
         </Card>
         <Card className="bg-slate-800 border-slate-700">
           <CardContent className="py-4 text-center">
-            <p className="text-3xl font-bold text-green-400">{stats.promoted}</p>
+            <p className="text-3xl font-bold text-orange-400">{stats.promoted}</p>
             <p className="text-sm text-slate-400">Promoted</p>
+          </CardContent>
+        </Card>
+        <Card className="bg-slate-800 border-slate-700">
+          <CardContent className="py-4 text-center">
+            <p className="text-3xl font-bold text-blue-400">{stats.invoiced}</p>
+            <p className="text-sm text-slate-400">Invoiced</p>
+          </CardContent>
+        </Card>
+        <Card className="bg-slate-800 border-slate-700">
+          <CardContent className="py-4 text-center">
+            <p className="text-3xl font-bold text-green-400">{stats.confirmed}</p>
+            <p className="text-sm text-slate-400">Confirmed</p>
+          </CardContent>
+        </Card>
+        <Card className="bg-slate-800 border-slate-700">
+          <CardContent className="py-4 text-center">
+            <p className="text-3xl font-bold text-red-400">{stats.expired}</p>
+            <p className="text-sm text-slate-400">Expired</p>
           </CardContent>
         </Card>
         <Card className="bg-slate-800 border-slate-700">
@@ -293,6 +403,26 @@ export const WaitlistList: FC = () => {
           </CardContent>
         </Card>
       </div>
+
+      {/* Held Spots Info - shown when a specific tournament is selected */}
+      {selectedTournamentData && selectedTournamentData.waitlistHeldSpots > 0 && (
+        <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-500/20">
+              <Users className="h-5 w-5 text-blue-400" />
+            </div>
+            <div>
+              <p className="text-white font-medium">
+                {selectedTournamentData.waitlistHeldSpots} spot{selectedTournamentData.waitlistHeldSpots !== 1 ? 's' : ''} held for waitlist
+              </p>
+              <p className="text-sm text-slate-400">
+                {selectedTournamentData.currentParticipants} / {selectedTournamentData.maxParticipants} registered
+                {' '}({selectedTournamentData.maxParticipants - selectedTournamentData.currentParticipants - selectedTournamentData.waitlistHeldSpots} available for new signups)
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Error State */}
       {error && (
@@ -322,6 +452,19 @@ export const WaitlistList: FC = () => {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-slate-700 bg-slate-800">
+                  <th className="w-10 py-3 px-4">
+                    <input
+                      type="checkbox"
+                      checked={
+                        invoiceableEntries.length > 0 &&
+                        selectedEntries.size === invoiceableEntries.length
+                      }
+                      onChange={handleSelectAllPromoted}
+                      disabled={invoiceableEntries.length === 0}
+                      className="rounded border-slate-600 bg-slate-700 text-orange-500 focus:ring-orange-500 disabled:opacity-50"
+                      title={invoiceableEntries.length === 0 ? 'No promoted entries to select' : 'Select all promoted entries'}
+                    />
+                  </th>
                   <th className="text-left py-3 px-4 font-semibold text-white">Pos</th>
                   <th className="text-left py-3 px-4 font-semibold text-white">Name</th>
                   <th className="text-left py-3 px-4 font-semibold text-white">Email</th>
@@ -334,49 +477,66 @@ export const WaitlistList: FC = () => {
                 </tr>
               </thead>
               <tbody>
-                {entries.map((entry) => (
-                  <tr
-                    key={entry.id}
-                    className="border-b border-slate-700/50 hover:bg-slate-700/30 transition-colors"
-                  >
-                    <td className="py-3 px-4">
-                      <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-orange-500/20 text-orange-400 font-bold">
-                        {entry.position}
-                      </span>
-                    </td>
-                    <td className="py-3 px-4 text-white">
-                      {entry.firstName} {entry.lastName}
-                    </td>
-                    <td className="py-3 px-4 text-slate-300">{entry.email}</td>
-                    {selectedTournament === 'all' && (
-                      <td className="py-3 px-4 text-slate-300">{entry.tournamentName}</td>
-                    )}
-                    <td className="py-3 px-4 text-slate-400 text-sm">
-                      {formatDate(entry.joinedAt)}
-                    </td>
-                    <td className="py-3 px-4">{getStatusBadge(entry.status)}</td>
-                    <td className="py-3 px-4">
-                      <div className="flex items-center justify-end gap-2">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleEdit(entry)}
-                          className="text-slate-400 hover:text-white hover:bg-slate-700"
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleDelete(entry)}
-                          className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                {entries.map((entry) => {
+                  const isInvoiceable = entry.status === 'promoted';
+                  const isSelected = selectedEntries.has(entry.id);
+
+                  return (
+                    <tr
+                      key={entry.id}
+                      className={`border-b border-slate-700/50 hover:bg-slate-700/30 transition-colors ${
+                        isSelected ? 'bg-blue-500/10' : ''
+                      }`}
+                    >
+                      <td className="py-3 px-4">
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => handleToggleSelection(entry.id)}
+                          disabled={!isInvoiceable}
+                          className="rounded border-slate-600 bg-slate-700 text-orange-500 focus:ring-orange-500 disabled:opacity-30"
+                          title={isInvoiceable ? 'Select for invoicing' : 'Only promoted entries can be invoiced'}
+                        />
+                      </td>
+                      <td className="py-3 px-4">
+                        <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-orange-500/20 text-orange-400 font-bold">
+                          {entry.position}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-white">
+                        {entry.firstName} {entry.lastName}
+                      </td>
+                      <td className="py-3 px-4 text-slate-300">{entry.email}</td>
+                      {selectedTournament === 'all' && (
+                        <td className="py-3 px-4 text-slate-300">{entry.tournamentName}</td>
+                      )}
+                      <td className="py-3 px-4 text-slate-400 text-sm">
+                        {formatDate(entry.joinedAt)}
+                      </td>
+                      <td className="py-3 px-4">{getStatusBadge(entry.status)}</td>
+                      <td className="py-3 px-4">
+                        <div className="flex items-center justify-end gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleEdit(entry)}
+                            className="text-slate-400 hover:text-white hover:bg-slate-700"
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleDelete(entry)}
+                            className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -398,6 +558,8 @@ export const WaitlistList: FC = () => {
         onOpenChange={setIsEditModalOpen}
         entry={editEntry}
         onSave={handleSaveEdit}
+        promoteWaitlistUser={promoteWaitlistUser}
+        onPromotionSuccess={fetchData}
       />
 
       {/* Delete Confirmation Dialog */}
@@ -410,6 +572,16 @@ export const WaitlistList: FC = () => {
         itemName={deleteEntry ? `${deleteEntry.firstName} ${deleteEntry.lastName}` : ''}
         itemType="Waitlist Entry"
         isLoading={isDeleting}
+      />
+
+      {/* Send Invoices Dialog */}
+      <SendInvoicesDialog
+        open={isInvoiceDialogOpen}
+        onOpenChange={setIsInvoiceDialogOpen}
+        selectedEntryIds={Array.from(selectedEntries)}
+        calculateInvoices={calculateInvoices}
+        sendInvoices={sendInvoices}
+        onSuccess={handleInvoiceSent}
       />
     </div>
   );

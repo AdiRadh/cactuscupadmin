@@ -41,6 +41,7 @@ export interface Tournament {
   rules: string | null;
   maxParticipants: number;
   currentParticipants: number;
+  waitlistHeldSpots: number;
   registrationFee: number; // in cents
   earlyBirdPrice: number | null; // in cents
   earlyBirdStartDate: string | null;
@@ -213,7 +214,7 @@ export type RegistrationStatus = 'confirmed' | 'cancelled' | 'waitlist';
 // Waitlist Types
 // ============================================================================
 
-export type WaitlistStatus = 'waiting' | 'promoted' | 'cancelled';
+export type WaitlistStatus = 'waiting' | 'promoted' | 'invoiced' | 'confirmed' | 'cancelled' | 'expired';
 
 export interface WaitlistEntry {
   id: string;
@@ -226,10 +227,72 @@ export interface WaitlistEntry {
   lastName: string;
   status: WaitlistStatus;
   promotedAt: string | null;
+  invoiceSentAt: string | null;
+  confirmedAt: string | null;
   createdAt: string;
   updatedAt: string;
   // Joined from tournaments table
   tournamentName?: string;
+  // Joined invoice info (optional)
+  invoice?: WaitlistInvoice;
+}
+
+// ============================================================================
+// Waitlist Invoice Types
+// ============================================================================
+
+export type WaitlistInvoiceStatus = 'pending' | 'paid' | 'cancelled' | 'voided' | 'expired';
+
+export interface WaitlistInvoice {
+  id: string;
+  waitlistEntryId: string;
+  userId: string;
+  tournamentId: string;
+  stripeInvoiceId: string;
+  stripeCustomerId: string;
+  stripeHostedInvoiceUrl: string | null;
+  tournamentFee: number;
+  eventRegistrationFee: number;
+  totalAmount: number;
+  status: WaitlistInvoiceStatus;
+  dueDate: string;
+  createdAt: string;
+  sentAt: string | null;
+  paidAt: string | null;
+  voidedAt: string | null;
+  expiredAt: string | null;
+  includesEventRegistration: boolean;
+}
+
+export interface InvoiceCalculation {
+  waitlistEntryId: string;
+  userId: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  tournamentId: string;
+  tournamentName: string;
+  tournamentFee: number;
+  needsEventRegistration: boolean;
+  eventRegistrationFee: number;
+  totalAmount: number;
+}
+
+export interface SendInvoicesRequest {
+  waitlistEntryIds: string[];
+}
+
+export interface SendInvoicesResponse {
+  success: boolean;
+  results: {
+    waitlistEntryId: string;
+    success: boolean;
+    invoiceId?: string;
+    stripeInvoiceId?: string;
+    error?: string;
+  }[];
+  totalSent: number;
+  totalFailed: number;
 }
 
 // ============================================================================
@@ -704,6 +767,7 @@ export function dbToTournament(db: DbTournament): Tournament {
     rules: db.rules,
     maxParticipants: db.max_participants,
     currentParticipants: db.current_participants,
+    waitlistHeldSpots: (db as any).waitlist_held_spots || 0,
     registrationFee: db.registration_fee,
     earlyBirdPrice: (db as any).early_bird_price || null,
     earlyBirdStartDate: (db as any).early_bird_start_date || null,
