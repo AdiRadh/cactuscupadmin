@@ -68,29 +68,71 @@ serve(async (req) => {
 
     // Verify the user is an admin
     const token = authHeader.replace('Bearer ', '');
+    console.log('[AUTH] Verifying user token...');
     const { data: { user }, error: userError } = await supabase.auth.getUser(token);
 
     if (userError || !user) {
+      console.error('[AUTH] Token verification failed:', {
+        error: userError?.message,
+        hasUser: !!user,
+      });
       throw new Error('Invalid or expired token');
     }
 
+    console.log('[AUTH] User verified:', {
+      userId: user.id,
+      email: user.email,
+    });
+
     // Check if user has admin role
-    const { data: userRole, error: roleError } = await supabase
+    // Note: Using .limit(1) instead of .single() to handle users with multiple roles
+    const { data: userRoles, error: roleError } = await supabase
       .from('user_roles')
       .select(`
         role_id,
+        is_active,
         roles!inner(name)
       `)
-      .eq('user_id', user.id)
-      .single();
+      .eq('user_id', user.id);
 
-    if (roleError || !userRole) {
+    console.log('[AUTH] User roles query result:', {
+      userId: user.id,
+      rolesFound: userRoles?.length || 0,
+      roles: userRoles?.map(r => ({
+        roleId: r.role_id,
+        roleName: (r.roles as { name: string })?.name,
+        isActive: r.is_active,
+      })),
+      error: roleError?.message,
+    });
+
+    if (roleError) {
+      console.error('[AUTH] Role query error:', roleError);
+      throw new Error(`User role query failed: ${roleError.message}`);
+    }
+
+    if (!userRoles || userRoles.length === 0) {
+      console.error('[AUTH] No roles found for user:', user.id);
       throw new Error('User role not found');
     }
 
-    const roleName = (userRole.roles as { name: string })?.name;
-    if (roleName !== 'admin' && roleName !== 'super_admin') {
-      throw new Error('Unauthorized: Admin access required');
+    // Check if any active role is admin or super_admin
+    const activeAdminRole = userRoles.find(r => {
+      const roleName = (r.roles as { name: string })?.name;
+      const isAdminRole = roleName === 'admin' || roleName === 'super_admin';
+      return isAdminRole && r.is_active === true;
+    });
+
+    console.log('[AUTH] Admin role check:', {
+      userId: user.id,
+      hasActiveAdminRole: !!activeAdminRole,
+      matchedRole: activeAdminRole ? (activeAdminRole.roles as { name: string })?.name : null,
+    });
+
+    if (!activeAdminRole) {
+      const roleNames = userRoles.map(r => `${(r.roles as { name: string })?.name} (active: ${r.is_active})`).join(', ');
+      console.error('[AUTH] Unauthorized - user roles:', roleNames);
+      throw new Error(`Unauthorized: Admin access required. User has roles: [${roleNames}]`);
     }
 
     const stripe = new Stripe(stripeKey, {

@@ -590,14 +590,57 @@ export function useWaitlist(): UseWaitlistReturn {
   const sendInvoices = useCallback(
     async (request: SendInvoicesRequest): Promise<SendInvoicesResponse> => {
       try {
+        // Log current auth state before making the call
+        const { data: sessionData } = await supabase.auth.getSession();
+        const session = sessionData?.session;
+
+        console.log('[SEND_INVOICES] Initiating invoice send:', {
+          entryCount: request.waitlistEntryIds.length,
+          hasSession: !!session,
+          userId: session?.user?.id,
+          userEmail: session?.user?.email,
+          tokenExpiresAt: session?.expires_at ? new Date(session.expires_at * 1000).toISOString() : null,
+          tokenExpired: session?.expires_at ? (session.expires_at * 1000) < Date.now() : null,
+        });
+
+        if (!session) {
+          console.error('[SEND_INVOICES] No active session - user may have been logged out');
+          return {
+            success: false,
+            results: [],
+            totalSent: 0,
+            totalFailed: request.waitlistEntryIds.length,
+            error: 'No active session. Please log in again.',
+          } as SendInvoicesResponse;
+        }
+
+        // Check if token is about to expire (within 5 minutes)
+        const fiveMinutesFromNow = Date.now() + (5 * 60 * 1000);
+        if (session.expires_at && (session.expires_at * 1000) < fiveMinutesFromNow) {
+          console.warn('[SEND_INVOICES] Token expiring soon, attempting refresh...');
+          const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+          if (refreshError) {
+            console.error('[SEND_INVOICES] Token refresh failed:', refreshError);
+          } else {
+            console.log('[SEND_INVOICES] Token refreshed successfully, new expiry:',
+              refreshData.session?.expires_at ? new Date(refreshData.session.expires_at * 1000).toISOString() : 'unknown');
+          }
+        }
+
         // Use supabase client (not supabaseAdmin) to include user's JWT token
         // The Edge Function needs the user token to verify admin role
+        console.log('[SEND_INVOICES] Calling Edge Function create-waitlist-invoices...');
         const { data, error } = await supabase.functions.invoke('create-waitlist-invoices', {
           body: request,
         });
 
         if (error) {
-          console.error('Error sending invoices:', error);
+          console.error('[SEND_INVOICES] Edge Function error:', {
+            message: error.message,
+            name: error.name,
+            context: error.context,
+            details: error,
+          });
           return {
             success: false,
             results: data?.results || [],
@@ -606,9 +649,16 @@ export function useWaitlist(): UseWaitlistReturn {
           };
         }
 
+        console.log('[SEND_INVOICES] Edge Function response:', {
+          success: data?.success,
+          totalSent: data?.totalSent,
+          totalFailed: data?.totalFailed,
+          errorMessage: data?.error,
+        });
+
         return data as SendInvoicesResponse;
       } catch (err) {
-        console.error('Error sending invoices:', err);
+        console.error('[SEND_INVOICES] Unexpected error:', err);
         return {
           success: false,
           results: [],

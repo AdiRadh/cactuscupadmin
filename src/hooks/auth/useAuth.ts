@@ -50,8 +50,24 @@ export function useAuth(): UseAuthReturn {
 
     // Only set timeout if user is logged in
     if (state.user) {
+      const timeoutAt = new Date(Date.now() + SESSION_TIMEOUT_MS);
+      console.log('[SESSION] Activity detected, resetting timeout. Will expire at:', timeoutAt.toISOString());
+
+      // Log current token expiration for debugging
+      if (state.session?.expires_at) {
+        const tokenExpiry = new Date(state.session.expires_at * 1000);
+        const now = new Date();
+        const minutesUntilExpiry = Math.round((tokenExpiry.getTime() - now.getTime()) / 60000);
+        console.log('[SESSION] JWT token status:', {
+          expiresAt: tokenExpiry.toISOString(),
+          minutesUntilExpiry,
+          isExpired: minutesUntilExpiry <= 0,
+        });
+      }
+
       timeoutRef.current = setTimeout(async () => {
-        console.log('Session timeout - logging out due to inactivity');
+        console.warn('[SESSION] Session timeout triggered - logging out due to 30 minutes of inactivity');
+        console.warn('[SESSION] User being logged out:', state.user?.email);
         await supabase.auth.signOut();
         setState({
           user: null,
@@ -61,7 +77,7 @@ export function useAuth(): UseAuthReturn {
         });
       }, SESSION_TIMEOUT_MS);
     }
-  }, [state.user]);
+  }, [state.user, state.session]);
 
   // Set up activity listeners for session timeout
   useEffect(() => {
@@ -98,16 +114,28 @@ export function useAuth(): UseAuthReturn {
 
     async function initializeAuth(): Promise<void> {
       try {
+        console.log('[AUTH] Initializing auth state...');
         const {
           data: { session },
           error,
         } = await supabase.auth.getSession();
 
         if (error) {
+          console.error('[AUTH] Error getting session:', error);
           throw error;
         }
 
         if (mounted) {
+          if (session) {
+            const tokenExpiry = session.expires_at ? new Date(session.expires_at * 1000) : null;
+            console.log('[AUTH] Session restored:', {
+              userId: session.user?.id,
+              email: session.user?.email,
+              tokenExpiresAt: tokenExpiry?.toISOString(),
+            });
+          } else {
+            console.log('[AUTH] No existing session found');
+          }
           setState({
             user: session?.user ?? null,
             session,
@@ -116,6 +144,7 @@ export function useAuth(): UseAuthReturn {
           });
         }
       } catch (error) {
+        console.error('[AUTH] Initialization error:', error);
         if (mounted) {
           setState({
             user: null,
@@ -132,7 +161,13 @@ export function useAuth(): UseAuthReturn {
     // Listen for auth changes
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log('[AUTH] Auth state changed:', {
+        event,
+        userId: session?.user?.id,
+        email: session?.user?.email,
+        hasSession: !!session,
+      });
       if (mounted) {
         setState({
           user: session?.user ?? null,
