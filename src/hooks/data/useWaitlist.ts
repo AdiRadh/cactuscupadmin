@@ -1,5 +1,6 @@
 import { useCallback } from 'react';
 import { supabaseAdmin, supabase } from '@/lib/api/supabase';
+import { isEarlyBirdActive } from '@/lib/utils/stripe';
 import type {
   WaitlistEntry,
   WaitlistStatus,
@@ -450,25 +451,46 @@ export function useWaitlist(): UseWaitlistReturn {
     async (entryIds: string[]): Promise<InvoiceCalculation[]> => {
       const calculations: InvoiceCalculation[] = [];
 
-      // Get site settings for event registration fee
+      // Get site settings for event registration fee (including early bird)
       const { data: settings } = await client
         .from('site_settings')
         .select('setting_key, setting_value')
-        .in('setting_key', ['supporter_entry_fee', 'event_registration_fee']);
+        .in('setting_key', [
+          'supporter_entry_fee',
+          'event_registration_fee',
+          'event_registration_early_bird_fee',
+          'event_registration_early_bird_end_date',
+        ]);
 
       const settingsMap: Record<string, string> = {};
       for (const row of settings || []) {
         settingsMap[row.setting_key] = row.setting_value;
       }
 
-      const eventRegFee = parseInt(
+      const regularEventRegFee = parseInt(
         settingsMap['supporter_entry_fee'] || settingsMap['event_registration_fee'] || '5000',
         10
       );
 
+      // Check if event registration early bird is active
+      const earlyBirdEventRegFeeStr = settingsMap['event_registration_early_bird_fee'];
+      const earlyBirdEventRegEndDate = settingsMap['event_registration_early_bird_end_date'];
+      const earlyBirdEventRegFee = earlyBirdEventRegFeeStr ? parseInt(earlyBirdEventRegFeeStr, 10) : null;
+
+      const isEventRegEarlyBirdActive = (() => {
+        if (!earlyBirdEventRegFee || !earlyBirdEventRegEndDate) return false;
+        const now = new Date();
+        const endDate = new Date(earlyBirdEventRegEndDate);
+        return now < endDate;
+      })();
+
+      const eventRegFee = isEventRegEarlyBirdActive && earlyBirdEventRegFee
+        ? earlyBirdEventRegFee
+        : regularEventRegFee;
+
       for (const entryId of entryIds) {
         try {
-          // Fetch entry with tournament info
+          // Fetch entry with tournament info (including early bird pricing)
           const { data: entry, error: entryError } = await client
             .from('tournament_waitlist')
             .select(`
@@ -482,7 +504,10 @@ export function useWaitlist(): UseWaitlistReturn {
               tournaments:tournament_id (
                 id,
                 name,
-                registration_fee
+                registration_fee,
+                early_bird_price,
+                early_bird_start_date,
+                early_bird_end_date
               )
             `)
             .eq('id', entryId)
@@ -498,11 +523,34 @@ export function useWaitlist(): UseWaitlistReturn {
             continue;
           }
 
-          const tournamentsData = entry.tournaments as { id: string; name: string; registration_fee: number }[] | { id: string; name: string; registration_fee: number } | null;
+          const tournamentsData = entry.tournaments as {
+            id: string;
+            name: string;
+            registration_fee: number;
+            early_bird_price: number | null;
+            early_bird_start_date: string | null;
+            early_bird_end_date: string | null;
+          }[] | {
+            id: string;
+            name: string;
+            registration_fee: number;
+            early_bird_price: number | null;
+            early_bird_start_date: string | null;
+            early_bird_end_date: string | null;
+          } | null;
           const tournament = Array.isArray(tournamentsData) ? tournamentsData[0] : tournamentsData;
           if (!tournament) {
             continue;
           }
+
+          // Determine tournament fee (use early bird if active)
+          const earlyBirdActive = isEarlyBirdActive(
+            tournament.early_bird_start_date,
+            tournament.early_bird_end_date
+          );
+          const tournamentFee = (earlyBirdActive && tournament.early_bird_price != null)
+            ? tournament.early_bird_price
+            : tournament.registration_fee;
 
           // Check if user has event registration
           const { data: eventReg } = await client
@@ -524,10 +572,10 @@ export function useWaitlist(): UseWaitlistReturn {
             lastName: entry.last_name,
             tournamentId: tournament.id,
             tournamentName: tournament.name,
-            tournamentFee: tournament.registration_fee,
+            tournamentFee: tournamentFee,
             needsEventRegistration: needsEventReg,
             eventRegistrationFee: eventFee,
-            totalAmount: tournament.registration_fee + eventFee,
+            totalAmount: tournamentFee + eventFee,
           });
         } catch (err) {
           console.error(`Error calculating invoice for ${entryId}:`, err);
@@ -542,41 +590,19 @@ export function useWaitlist(): UseWaitlistReturn {
   const sendInvoices = useCallback(
     async (request: SendInvoicesRequest): Promise<SendInvoicesResponse> => {
       try {
-        // Get the current session for authorization
-        const { data: sessionData } = await client.auth.getSession();
-        const accessToken = sessionData?.session?.access_token;
+        // Use supabase client (not supabaseAdmin) to include user's JWT token
+        // The Edge Function needs the user token to verify admin role
+        const { data, error } = await supabase.functions.invoke('create-waitlist-invoices', {
+          body: request,
+        });
 
-        if (!accessToken) {
+        if (error) {
+          console.error('Error sending invoices:', error);
           return {
             success: false,
-            results: [],
-            totalSent: 0,
-            totalFailed: request.waitlistEntryIds.length,
-          };
-        }
-
-        // Call the edge function
-        const response = await fetch(
-          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-waitlist-invoices`,
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${accessToken}`,
-            },
-            body: JSON.stringify(request),
-          }
-        );
-
-        const data = await response.json();
-
-        if (!response.ok) {
-          console.error('Error sending invoices:', data);
-          return {
-            success: false,
-            results: data.results || [],
-            totalSent: data.totalSent || 0,
-            totalFailed: data.totalFailed || request.waitlistEntryIds.length,
+            results: data?.results || [],
+            totalSent: data?.totalSent || 0,
+            totalFailed: data?.totalFailed || request.waitlistEntryIds.length,
           };
         }
 
