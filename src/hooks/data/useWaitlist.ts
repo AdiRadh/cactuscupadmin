@@ -164,6 +164,15 @@ export interface WaitlistVerificationResult {
   duplicateCount: number;
 }
 
+/**
+ * Result of creating a tournament registration from a waitlist entry
+ */
+export interface CreateRegistrationResult {
+  success: boolean;
+  tournamentRegistrationId?: string;
+  error?: string;
+}
+
 export interface UseWaitlistReturn {
   /**
    * Fetch waitlist entries, optionally filtered by tournament
@@ -193,6 +202,12 @@ export interface UseWaitlistReturn {
    * Used for duplicates where user already has a tournament registration
    */
   confirmWaitlistEntry: (id: string) => Promise<void>;
+
+  /**
+   * Create a tournament registration from a confirmed waitlist entry
+   * This requires admin confirmation before being called
+   */
+  createTournamentRegistrationFromWaitlist: (waitlistEntryId: string) => Promise<CreateRegistrationResult>;
 
   /**
    * Confirm multiple waitlist entries at once
@@ -293,7 +308,35 @@ export function useWaitlist(): UseWaitlistReturn {
         throw error;
       }
 
-      return (data || []).map((entry) => dbToWaitlistEntry(entry as WaitlistWithTournament));
+      if (!data || data.length === 0) {
+        return [];
+      }
+
+      // Get unique user_id + tournament_id pairs to check for existing registrations
+      const userIds = [...new Set(data.map((e) => e.user_id))];
+      const tournamentIds = [...new Set(data.map((e) => e.tournament_id))];
+
+      // Fetch existing tournament registrations for these user/tournament combinations
+      const { data: registrations } = await client
+        .from('tournament_registrations')
+        .select('user_id, tournament_id')
+        .in('user_id', userIds)
+        .in('tournament_id', tournamentIds);
+
+      // Create a Set of "userId-tournamentId" keys for quick lookup
+      const registrationKeys = new Set(
+        (registrations || []).map((r) => `${r.user_id}-${r.tournament_id}`)
+      );
+
+      // Map entries and include hasTournamentRegistration flag
+      return data.map((entry) => {
+        const baseEntry = dbToWaitlistEntry(entry as WaitlistWithTournament);
+        const key = `${entry.user_id}-${entry.tournament_id}`;
+        return {
+          ...baseEntry,
+          hasTournamentRegistration: registrationKeys.has(key),
+        };
+      });
     },
     [client]
   );
@@ -1072,6 +1115,115 @@ export function useWaitlist(): UseWaitlistReturn {
   }, []);
 
   /**
+   * Create a tournament registration from a confirmed waitlist entry
+   * This should only be called after admin confirmation
+   */
+  const createTournamentRegistrationFromWaitlist = useCallback(
+    async (waitlistEntryId: string): Promise<CreateRegistrationResult> => {
+      try {
+        // Fetch the waitlist entry with tournament info
+        const { data: entry, error: entryError } = await client
+          .from('tournament_waitlist')
+          .select(`
+            id,
+            user_id,
+            tournament_id,
+            status,
+            tournaments:tournament_id (
+              id,
+              name,
+              registration_fee
+            )
+          `)
+          .eq('id', waitlistEntryId)
+          .single();
+
+        if (entryError || !entry) {
+          console.error('Error fetching waitlist entry:', entryError);
+          return { success: false, error: 'Waitlist entry not found' };
+        }
+
+        // Check that the entry is in confirmed status
+        if (entry.status !== 'confirmed') {
+          return {
+            success: false,
+            error: `Cannot create registration: entry is in "${entry.status}" status, must be "confirmed"`,
+          };
+        }
+
+        // Check if a tournament registration already exists
+        const { data: existingReg } = await client
+          .from('tournament_registrations')
+          .select('id')
+          .eq('user_id', entry.user_id)
+          .eq('tournament_id', entry.tournament_id)
+          .maybeSingle();
+
+        if (existingReg) {
+          return {
+            success: false,
+            error: 'A tournament registration already exists for this user and tournament',
+          };
+        }
+
+        // Get user profile for experience_level and club
+        const { data: profile } = await client
+          .from('profiles')
+          .select('experience_level, club')
+          .eq('id', entry.user_id)
+          .single();
+
+        // Get tournament fee
+        const tournamentsData = entry.tournaments as {
+          id: string;
+          name: string;
+          registration_fee: number;
+        }[] | {
+          id: string;
+          name: string;
+          registration_fee: number;
+        } | null;
+        const tournament = Array.isArray(tournamentsData) ? tournamentsData[0] : tournamentsData;
+        const amountPaid = tournament?.registration_fee || 0;
+
+        // Create the tournament registration
+        const { data: newReg, error: regError } = await client
+          .from('tournament_registrations')
+          .insert({
+            user_id: entry.user_id,
+            tournament_id: entry.tournament_id,
+            payment_status: 'completed',
+            amount_paid: amountPaid,
+            experience_level: profile?.experience_level || 'intermediate',
+            club: profile?.club || null,
+            waiver_accepted: false,
+            details_completed: false,
+            registered_at: new Date().toISOString(),
+          })
+          .select('id')
+          .single();
+
+        if (regError) {
+          console.error('Error creating tournament registration:', regError);
+          return { success: false, error: regError.message };
+        }
+
+        return {
+          success: true,
+          tournamentRegistrationId: newReg.id,
+        };
+      } catch (err) {
+        console.error('Error creating tournament registration from waitlist:', err);
+        return {
+          success: false,
+          error: err instanceof Error ? err.message : 'Unknown error occurred',
+        };
+      }
+    },
+    [client]
+  );
+
+  /**
    * Get combined invoices with optional filters
    */
   const getCombinedInvoices = useCallback(async (filters?: { status?: string; userId?: string }): Promise<CombinedInvoice[]> => {
@@ -1157,5 +1309,6 @@ export function useWaitlist(): UseWaitlistReturn {
     getUsersWithPromotedEntries,
     createCombinedInvoice,
     getCombinedInvoices,
+    createTournamentRegistrationFromWaitlist,
   };
 }

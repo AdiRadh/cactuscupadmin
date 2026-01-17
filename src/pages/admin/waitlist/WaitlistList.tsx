@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Badge } from '@/components/ui';
 import { Button } from '@/components/ui/Button';
 import { Card, CardContent } from '@/components/ui/Card';
-import { DeleteConfirmDialog } from '@/components/admin/ConfirmDialog';
+import { DeleteConfirmDialog, ConfirmDialog } from '@/components/admin/ConfirmDialog';
 import { FilterBar } from '@/components/admin/FilterBar';
 import { SearchInput, FilterSelect, DateRangeFilter } from '@/components/admin/filters';
 import { SortableTableHeader, TableHeader } from '@/components/admin/SortableTableHeader';
@@ -23,6 +23,7 @@ import {
   AlertCircle,
   FileCheck,
   ShieldCheck,
+  UserCheck,
 } from 'lucide-react';
 import { useWaitlist } from '@/hooks/data/useWaitlist';
 import type { CreateWaitlistEntryData, WaitlistVerificationResult } from '@/hooks/data/useWaitlist';
@@ -87,6 +88,10 @@ export const WaitlistList: FC = () => {
   const [isVerifying, setIsVerifying] = useState(false);
   const [verificationError, setVerificationError] = useState<string | null>(null);
 
+  // Create tournament registration dialog state
+  const [createRegEntry, setCreateRegEntry] = useState<WaitlistEntry | null>(null);
+  const [isCreatingRegistration, setIsCreatingRegistration] = useState(false);
+
   const {
     getWaitlistEntries,
     createWaitlistEntry,
@@ -98,6 +103,7 @@ export const WaitlistList: FC = () => {
     calculateInvoices,
     sendInvoices,
     verifyWaitlistRegistrations,
+    createTournamentRegistrationFromWaitlist,
   } = useWaitlist();
   const { listTournaments } = useAdmin();
 
@@ -399,6 +405,29 @@ export const WaitlistList: FC = () => {
       await fetchData();
     } catch (err) {
       console.error('Error confirming all waitlist entries:', err);
+    }
+  };
+
+  // Handle creating tournament registration from waitlist entry
+  const handleCreateRegistration = async () => {
+    if (!createRegEntry) return;
+
+    setIsCreatingRegistration(true);
+    try {
+      const result = await createTournamentRegistrationFromWaitlist(createRegEntry.id);
+      if (result.success) {
+        // Refresh the main list
+        await fetchData();
+        setCreateRegEntry(null);
+      } else {
+        console.error('Error creating tournament registration:', result.error);
+        alert(`Failed to create tournament registration: ${result.error}`);
+      }
+    } catch (err) {
+      console.error('Error creating tournament registration:', err);
+      alert('Failed to create tournament registration. Please try again.');
+    } finally {
+      setIsCreatingRegistration(false);
     }
   };
 
@@ -737,6 +766,17 @@ export const WaitlistList: FC = () => {
                       <td className="py-3 px-4">{getStatusBadge(entry.status)}</td>
                       <td className="py-3 px-4">
                         <div className="flex items-center justify-end gap-2">
+                          {entry.status === 'confirmed' && !entry.hasTournamentRegistration && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setCreateRegEntry(entry)}
+                              className="text-green-400 hover:text-green-300 hover:bg-green-500/10"
+                              title="Create tournament registration"
+                            >
+                              <UserCheck className="h-4 w-4" />
+                            </Button>
+                          )}
                           <Button
                             variant="ghost"
                             size="sm"
@@ -815,6 +855,25 @@ export const WaitlistList: FC = () => {
         onRemoveFromWaitlist={handleRemoveFromWaitlist}
         onConfirmEntry={handleConfirmEntry}
         onConfirmAll={handleConfirmAll}
+      />
+
+      {/* Create Tournament Registration Confirmation Dialog */}
+      <ConfirmDialog
+        open={createRegEntry !== null}
+        onOpenChange={(open) => {
+          if (!open) setCreateRegEntry(null);
+        }}
+        onConfirm={handleCreateRegistration}
+        title="Create Tournament Registration"
+        description={
+          createRegEntry
+            ? `Are you sure you want to create a tournament registration for ${createRegEntry.firstName} ${createRegEntry.lastName} in ${createRegEntry.tournamentName || 'this tournament'}? This will add them to the official participant list.`
+            : ''
+        }
+        confirmText="Create Registration"
+        cancelText="Cancel"
+        variant="warning"
+        isLoading={isCreatingRegistration}
       />
     </div>
   );

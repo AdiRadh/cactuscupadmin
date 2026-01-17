@@ -235,6 +235,8 @@ export interface WaitlistEntry {
   tournamentName?: string;
   // Joined invoice info (optional)
   invoice?: WaitlistInvoice;
+  // Whether a tournament registration already exists for this user/tournament
+  hasTournamentRegistration?: boolean;
 }
 
 // ============================================================================
