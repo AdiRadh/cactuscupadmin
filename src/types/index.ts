@@ -295,6 +295,61 @@ export interface SendInvoicesResponse {
   totalFailed: number;
 }
 
+// Waitlist entry with tournament details for billing
+export interface WaitlistEntryWithTournament extends WaitlistEntry {
+  tournament: {
+    id: string;
+    name: string;
+    registrationFee: number;
+    date: string;
+  };
+}
+
+// User with their promoted waitlist entries for billing page
+export interface UserWithPromotedEntries {
+  userId: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  promotedEntries: WaitlistEntryWithTournament[];
+  totalAmount: number;
+}
+
+export interface CombinedInvoice {
+  id: string;
+  userId: string;
+  stripeInvoiceId: string;
+  stripeCustomerId: string;
+  stripeHostedInvoiceUrl: string | null;
+  totalAmount: number;
+  status: WaitlistInvoiceStatus;
+  dueDate: string;
+  sentAt: string | null;
+  paidAt: string | null;
+  includesEventRegistration: boolean;
+  eventRegistrationFee: number;
+  notes: string | null;
+  createdBy: string | null;
+  createdAt: string;
+  updatedAt: string;
+  items?: CombinedInvoiceItem[];
+}
+
+export interface CombinedInvoiceItem {
+  id: string;
+  combinedInvoiceId: string;
+  waitlistEntryId: string;
+  tournamentId: string;
+  tournamentFee: number;
+  description: string | null;
+  createdAt: string;
+  tournament?: {
+    id: string;
+    name: string;
+    date: string;
+  };
+}
+
 // ============================================================================
 // Event Registration Types
 // ============================================================================

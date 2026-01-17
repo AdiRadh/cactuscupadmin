@@ -1,14 +1,27 @@
 import type { FC } from 'react';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useAdmin } from '@/hooks';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui';
+import { FilterBar } from '@/components/admin/FilterBar';
+import { FilterSelect } from '@/components/admin/filters';
+import { SortableTableHeader, TableHeader } from '@/components/admin/SortableTableHeader';
 import { Plus, Edit, Trash2, Package, Eye, EyeOff, RefreshCw, Save, GripVertical, Layers, Users } from 'lucide-react';
 import { formatPrice } from '@/lib/utils/formatting';
 import { DeleteConfirmDialog } from '@/components/admin/ConfirmDialog';
+import { useListFilters } from '@/hooks/useListFilters';
 import type { Tournament } from '@/types';
+import {
+  WEAPON_OPTIONS,
+  DIVISION_OPTIONS,
+  TOURNAMENT_STATUS_OPTIONS,
+  VISIBILITY_OPTIONS,
+  DEFAULT_TOURNAMENT_FILTERS,
+  type TournamentFilters,
+  type TournamentSortField,
+} from '@/types/filters';
 import { syncTournamentToStripe, syncTournamentPricing, bulkSyncTournamentsToStripe } from '@/lib/utils/stripe';
 import { DraggableTournamentList } from '@/components/admin/DraggableTournamentList';
 import { supabase } from '@/lib/api/supabase';
@@ -34,6 +47,71 @@ export const TournamentsList: FC = () => {
   const [registrationsTournament, setRegistrationsTournament] = useState<Tournament | null>(null);
 
   const { listTournaments, deleteTournament, updateTournament } = useAdmin();
+
+  // Filter and sort state
+  const {
+    filters,
+    setFilter,
+    resetFilters,
+    hasActiveFilters,
+    sort,
+    toggleSort,
+    getSortDirection,
+  } = useListFilters<TournamentFilters, TournamentSortField>({
+    defaultFilters: DEFAULT_TOURNAMENT_FILTERS,
+    defaultSort: { field: 'name', order: 'asc' },
+  });
+
+  // Client-side filtering and sorting
+  const filteredAndSortedTournaments = useMemo(() => {
+    let result = [...tournaments];
+
+    // Filter by weapon
+    if (filters.weapon) {
+      result = result.filter((t) => t.weapon === filters.weapon);
+    }
+
+    // Filter by division
+    if (filters.division) {
+      result = result.filter((t) => t.division === filters.division);
+    }
+
+    // Filter by status
+    if (filters.status) {
+      result = result.filter((t) => t.status === filters.status);
+    }
+
+    // Filter by visibility
+    if (filters.visible === 'visible') {
+      result = result.filter((t) => t.visible);
+    } else if (filters.visible === 'hidden') {
+      result = result.filter((t) => !t.visible);
+    }
+
+    // Sort
+    if (sort) {
+      result.sort((a, b) => {
+        let comparison = 0;
+        switch (sort.field) {
+          case 'name':
+            comparison = a.name.localeCompare(b.name);
+            break;
+          case 'participants':
+            comparison = a.currentParticipants - b.currentParticipants;
+            break;
+          case 'fee':
+            comparison = a.registrationFee - b.registrationFee;
+            break;
+          case 'date':
+            comparison = new Date(a.date).getTime() - new Date(b.date).getTime();
+            break;
+        }
+        return sort.order === 'desc' ? -comparison : comparison;
+      });
+    }
+
+    return result;
+  }, [tournaments, filters.weapon, filters.division, filters.status, filters.visible, sort]);
 
   const fetchTournaments = useCallback(async () => {
     try {
@@ -332,12 +410,46 @@ export const TournamentsList: FC = () => {
         </div>
       </div>
 
+      {/* Filters */}
+      {!isReorderMode && (
+        <FilterBar
+          hasActiveFilters={hasActiveFilters}
+          onReset={resetFilters}
+          title="Filters"
+        >
+          <FilterSelect
+            label="Weapon"
+            value={filters.weapon}
+            onChange={(value) => setFilter('weapon', value as TournamentFilters['weapon'])}
+            options={WEAPON_OPTIONS}
+          />
+          <FilterSelect
+            label="Division"
+            value={filters.division}
+            onChange={(value) => setFilter('division', value as TournamentFilters['division'])}
+            options={DIVISION_OPTIONS}
+          />
+          <FilterSelect
+            label="Status"
+            value={filters.status}
+            onChange={(value) => setFilter('status', value as TournamentFilters['status'])}
+            options={TOURNAMENT_STATUS_OPTIONS}
+          />
+          <FilterSelect
+            label="Visibility"
+            value={filters.visible}
+            onChange={(value) => setFilter('visible', value as TournamentFilters['visible'])}
+            options={VISIBILITY_OPTIONS}
+          />
+        </FilterBar>
+      )}
+
       {/* Tournaments List/Table */}
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
             <CardTitle>
-              {isReorderMode ? 'Drag to Reorder Tournaments' : 'All Tournaments'}
+              {isReorderMode ? 'Drag to Reorder Tournaments' : `Tournaments (${filteredAndSortedTournaments.length})`}
             </CardTitle>
             {isReorderMode && (
               <p className="text-sm text-orange-200">
@@ -351,9 +463,11 @@ export const TournamentsList: FC = () => {
             <div className="text-center py-8 text-white">
               Loading tournaments...
             </div>
-          ) : tournaments.length === 0 ? (
+          ) : filteredAndSortedTournaments.length === 0 ? (
             <div className="text-center py-8 text-white">
-              No tournaments found. Create your first tournament to get started.
+              {hasActiveFilters
+                ? 'No tournaments match your filters. Try adjusting or resetting filters.'
+                : 'No tournaments found. Create your first tournament to get started.'}
             </div>
           ) : isReorderMode ? (
             <DraggableTournamentList
@@ -369,34 +483,36 @@ export const TournamentsList: FC = () => {
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-white/20">
-                    <th className="text-left py-3 px-4 font-semibold text-white">
+                    <SortableTableHeader
+                      field="name"
+                      sortDirection={getSortDirection('name')}
+                      onSort={() => toggleSort('name')}
+                    >
                       Name
-                    </th>
-                    <th className="text-left py-3 px-4 font-semibold text-white">
-                      Weapon
-                    </th>
-                    <th className="text-left py-3 px-4 font-semibold text-white">
-                      Division
-                    </th>
-                    <th className="text-left py-3 px-4 font-semibold text-white">
+                    </SortableTableHeader>
+                    <TableHeader>Weapon</TableHeader>
+                    <TableHeader>Division</TableHeader>
+                    <SortableTableHeader
+                      field="participants"
+                      sortDirection={getSortDirection('participants')}
+                      onSort={() => toggleSort('participants')}
+                    >
                       Participants
-                    </th>
-                    <th className="text-left py-3 px-4 font-semibold text-white">
+                    </SortableTableHeader>
+                    <SortableTableHeader
+                      field="fee"
+                      sortDirection={getSortDirection('fee')}
+                      onSort={() => toggleSort('fee')}
+                    >
                       Fee
-                    </th>
-                    <th className="text-left py-3 px-4 font-semibold text-white">
-                      Status
-                    </th>
-                    <th className="text-left py-3 px-4 font-semibold text-white">
-                      Stripe
-                    </th>
-                    <th className="text-right py-3 px-4 font-semibold text-white">
-                      Actions
-                    </th>
+                    </SortableTableHeader>
+                    <TableHeader>Status</TableHeader>
+                    <TableHeader>Stripe</TableHeader>
+                    <TableHeader align="right">Actions</TableHeader>
                   </tr>
                 </thead>
                 <tbody>
-                  {tournaments.map((tournament) => (
+                  {filteredAndSortedTournaments.map((tournament) => (
                     <tr
                       key={tournament.id}
                       className="border-b border-white/10 hover:bg-white/5 transition-colors"

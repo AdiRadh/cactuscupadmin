@@ -8,6 +8,9 @@ import type {
   InvoiceCalculation,
   SendInvoicesRequest,
   SendInvoicesResponse,
+  WaitlistEntryWithTournament,
+  UserWithPromotedEntries,
+  CombinedInvoice,
 } from '@/types';
 
 interface DbWaitlistEntry {
@@ -136,6 +139,31 @@ export interface PromotionResult {
   tournamentId?: string;
 }
 
+/**
+ * Result of verifying waitlist users against tournament registrations
+ */
+export interface WaitlistDuplicateEntry {
+  waitlistEntryId: string;
+  userId: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  tournamentId: string;
+  tournamentName: string;
+  waitlistStatus: WaitlistStatus;
+  waitlistPosition: number;
+  waitlistJoinedAt: string;
+  registrationId: string;
+  registrationPaymentStatus: string;
+  registrationDate: string;
+}
+
+export interface WaitlistVerificationResult {
+  duplicates: WaitlistDuplicateEntry[];
+  totalWaitlistChecked: number;
+  duplicateCount: number;
+}
+
 export interface UseWaitlistReturn {
   /**
    * Fetch waitlist entries, optionally filtered by tournament
@@ -191,6 +219,37 @@ export interface UseWaitlistReturn {
    * Get invoice for a waitlist entry
    */
   getInvoiceForEntry: (entryId: string) => Promise<WaitlistInvoice | null>;
+
+  /**
+   * Verify which waitlist users are already registered for their tournament
+   * Returns a list of duplicates where a user is both on the waitlist AND registered
+   */
+  verifyWaitlistRegistrations: (tournamentId?: string) => Promise<WaitlistVerificationResult>;
+
+  /**
+   * Get all promoted, unbilled entries for a specific user
+   */
+  getPromotedEntriesByUser: (userId: string) => Promise<WaitlistEntryWithTournament[]>;
+
+  /**
+   * Get all users with promoted but unbilled entries
+   */
+  getUsersWithPromotedEntries: () => Promise<UserWithPromotedEntries[]>;
+
+  /**
+   * Create a combined invoice for multiple waitlist entries
+   */
+  createCombinedInvoice: (params: {
+    userId: string;
+    waitlistEntryIds: string[];
+    dueDays?: number;
+    notes?: string;
+  }) => Promise<{ success: boolean; invoiceUrl?: string; error?: string }>;
+
+  /**
+   * Get combined invoices with optional filters
+   */
+  getCombinedInvoices: (filters?: { status?: string; userId?: string }) => Promise<CombinedInvoice[]>;
 }
 
 /**
@@ -694,6 +753,341 @@ export function useWaitlist(): UseWaitlistReturn {
     [client]
   );
 
+  const verifyWaitlistRegistrations = useCallback(
+    async (tournamentId?: string): Promise<WaitlistVerificationResult> => {
+      try {
+        // Fetch waitlist entries (excluding cancelled/expired as they're not active)
+        let waitlistQuery = client
+          .from('tournament_waitlist')
+          .select(`
+            id,
+            user_id,
+            tournament_id,
+            position,
+            joined_at,
+            email,
+            first_name,
+            last_name,
+            status,
+            tournaments:tournament_id (
+              name
+            )
+          `)
+          .not('status', 'in', '(cancelled,expired)');
+
+        if (tournamentId) {
+          waitlistQuery = waitlistQuery.eq('tournament_id', tournamentId);
+        }
+
+        const { data: waitlistData, error: waitlistError } = await waitlistQuery;
+
+        if (waitlistError) {
+          console.error('Error fetching waitlist entries for verification:', waitlistError);
+          throw waitlistError;
+        }
+
+        if (!waitlistData || waitlistData.length === 0) {
+          return {
+            duplicates: [],
+            totalWaitlistChecked: 0,
+            duplicateCount: 0,
+          };
+        }
+
+        // Get unique user_id + tournament_id combinations to check
+        const userTournamentPairs = waitlistData.map((entry) => ({
+          userId: entry.user_id,
+          tournamentId: entry.tournament_id,
+        }));
+
+        // Fetch all tournament registrations for these users
+        const userIds = [...new Set(userTournamentPairs.map((p) => p.userId))];
+        const tournamentIds = [...new Set(userTournamentPairs.map((p) => p.tournamentId))];
+
+        const { data: registrations, error: regError } = await client
+          .from('tournament_registrations')
+          .select('id, user_id, tournament_id, payment_status, registered_at')
+          .in('user_id', userIds)
+          .in('tournament_id', tournamentIds);
+
+        if (regError) {
+          console.error('Error fetching tournament registrations for verification:', regError);
+          throw regError;
+        }
+
+        // Create a map for quick lookup: `userId-tournamentId` -> registration
+        const registrationMap = new Map<
+          string,
+          { id: string; paymentStatus: string; registeredAt: string }
+        >();
+        (registrations || []).forEach((reg) => {
+          const key = `${reg.user_id}-${reg.tournament_id}`;
+          registrationMap.set(key, {
+            id: reg.id,
+            paymentStatus: reg.payment_status || 'unknown',
+            registeredAt: reg.registered_at || '',
+          });
+        });
+
+        // Find duplicates - users who are on waitlist AND have a registration
+        const duplicates: WaitlistDuplicateEntry[] = [];
+
+        for (const entry of waitlistData) {
+          const key = `${entry.user_id}-${entry.tournament_id}`;
+          const registration = registrationMap.get(key);
+
+          if (registration) {
+            const tournamentsData = entry.tournaments as { name: string } | { name: string }[] | null;
+            const tournament = Array.isArray(tournamentsData) ? tournamentsData[0] : tournamentsData;
+
+            duplicates.push({
+              waitlistEntryId: entry.id,
+              userId: entry.user_id,
+              email: entry.email,
+              firstName: entry.first_name,
+              lastName: entry.last_name,
+              tournamentId: entry.tournament_id,
+              tournamentName: tournament?.name || 'Unknown Tournament',
+              waitlistStatus: entry.status as WaitlistStatus,
+              waitlistPosition: entry.position,
+              waitlistJoinedAt: entry.joined_at,
+              registrationId: registration.id,
+              registrationPaymentStatus: registration.paymentStatus,
+              registrationDate: registration.registeredAt,
+            });
+          }
+        }
+
+        return {
+          duplicates,
+          totalWaitlistChecked: waitlistData.length,
+          duplicateCount: duplicates.length,
+        };
+      } catch (err) {
+        console.error('Error verifying waitlist registrations:', err);
+        throw err;
+      }
+    },
+    [client]
+  );
+
+  /**
+   * Get all promoted, unbilled entries for a specific user
+   */
+  const getPromotedEntriesByUser = useCallback(async (userId: string): Promise<WaitlistEntryWithTournament[]> => {
+    try {
+      const { data, error } = await client
+        .from('tournament_waitlist')
+        .select(`
+          *,
+          tournaments (
+            id,
+            name,
+            registration_fee,
+            date
+          )
+        `)
+        .eq('user_id', userId)
+        .eq('status', 'promoted')
+        .is('combined_invoice_id', null)
+        .order('joined_at', { ascending: true });
+
+      if (error || !data) return [];
+
+      return data.map((entry: any) => ({
+        ...dbToWaitlistEntry(entry as WaitlistWithTournament),
+        tournament: {
+          id: entry.tournaments.id,
+          name: entry.tournaments.name,
+          registrationFee: entry.tournaments.registration_fee,
+          date: entry.tournaments.date,
+        },
+      }));
+    } catch {
+      return [];
+    }
+  }, [client]);
+
+  /**
+   * Get all users with promoted but unbilled entries
+   */
+  const getUsersWithPromotedEntries = useCallback(async (): Promise<UserWithPromotedEntries[]> => {
+    try {
+      // Get all promoted entries that don't have a combined invoice
+      const { data, error } = await client
+        .from('tournament_waitlist')
+        .select(`
+          *,
+          tournaments (
+            id,
+            name,
+            registration_fee,
+            date
+          )
+        `)
+        .eq('status', 'promoted')
+        .is('combined_invoice_id', null)
+        .order('user_id')
+        .order('joined_at', { ascending: true });
+
+      if (error || !data) return [];
+
+      // Group entries by user
+      const userMap = new Map<string, UserWithPromotedEntries>();
+
+      for (const entry of data) {
+        const userId = entry.user_id;
+        const tournament = entry.tournaments as any;
+
+        if (!userMap.has(userId)) {
+          userMap.set(userId, {
+            userId,
+            email: entry.email,
+            firstName: entry.first_name,
+            lastName: entry.last_name,
+            promotedEntries: [],
+            totalAmount: 0,
+          });
+        }
+
+        const user = userMap.get(userId)!;
+        const entryWithTournament: WaitlistEntryWithTournament = {
+          ...dbToWaitlistEntry(entry as WaitlistWithTournament),
+          tournament: {
+            id: tournament.id,
+            name: tournament.name,
+            registrationFee: tournament.registration_fee,
+            date: tournament.date,
+          },
+        };
+
+        user.promotedEntries.push(entryWithTournament);
+        user.totalAmount += tournament.registration_fee || 0;
+      }
+
+      return Array.from(userMap.values());
+    } catch {
+      return [];
+    }
+  }, [client]);
+
+  /**
+   * Create a combined invoice for multiple waitlist entries
+   */
+  const createCombinedInvoice = useCallback(async (params: {
+    userId: string;
+    waitlistEntryIds: string[];
+    dueDays?: number;
+    notes?: string;
+  }): Promise<{ success: boolean; invoiceUrl?: string; error?: string }> => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        return { success: false, error: 'Not authenticated' };
+      }
+
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-waitlist-invoices`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({
+            mode: 'combined',
+            userId: params.userId,
+            waitlistEntryIds: params.waitlistEntryIds,
+            dueDays: params.dueDays || 7,
+            notes: params.notes,
+          }),
+        }
+      );
+
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        return { success: false, error: result.error || 'Failed to create invoice' };
+      }
+
+      return {
+        success: true,
+        invoiceUrl: result.stripeHostedInvoiceUrl,
+      };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'An unexpected error occurred';
+      return { success: false, error: message };
+    }
+  }, []);
+
+  /**
+   * Get combined invoices with optional filters
+   */
+  const getCombinedInvoices = useCallback(async (filters?: { status?: string; userId?: string }): Promise<CombinedInvoice[]> => {
+    try {
+      let query = client
+        .from('combined_waitlist_invoices')
+        .select(`
+          *,
+          combined_invoice_items (
+            *,
+            tournaments (
+              id,
+              name,
+              date
+            )
+          )
+        `)
+        .order('created_at', { ascending: false });
+
+      if (filters?.status) {
+        query = query.eq('status', filters.status);
+      }
+      if (filters?.userId) {
+        query = query.eq('user_id', filters.userId);
+      }
+
+      const { data, error } = await query;
+
+      if (error || !data) return [];
+
+      return data.map((invoice: any) => ({
+        id: invoice.id,
+        userId: invoice.user_id,
+        stripeInvoiceId: invoice.stripe_invoice_id,
+        stripeCustomerId: invoice.stripe_customer_id,
+        stripeHostedInvoiceUrl: invoice.stripe_hosted_invoice_url,
+        totalAmount: invoice.total_amount,
+        status: invoice.status,
+        dueDate: invoice.due_date,
+        sentAt: invoice.sent_at,
+        paidAt: invoice.paid_at,
+        includesEventRegistration: invoice.includes_event_registration,
+        eventRegistrationFee: invoice.event_registration_fee,
+        notes: invoice.notes,
+        createdBy: invoice.created_by,
+        createdAt: invoice.created_at,
+        updatedAt: invoice.updated_at,
+        items: invoice.combined_invoice_items?.map((item: any) => ({
+          id: item.id,
+          combinedInvoiceId: item.combined_invoice_id,
+          waitlistEntryId: item.waitlist_entry_id,
+          tournamentId: item.tournament_id,
+          tournamentFee: item.tournament_fee,
+          description: item.description,
+          createdAt: item.created_at,
+          tournament: item.tournaments ? {
+            id: item.tournaments.id,
+            name: item.tournaments.name,
+            date: item.tournaments.date,
+          } : undefined,
+        })),
+      }));
+    } catch {
+      return [];
+    }
+  }, [client]);
+
   return {
     getWaitlistEntries,
     createWaitlistEntry,
@@ -705,5 +1099,10 @@ export function useWaitlist(): UseWaitlistReturn {
     calculateInvoices,
     sendInvoices,
     getInvoiceForEntry,
+    verifyWaitlistRegistrations,
+    getPromotedEntriesByUser,
+    getUsersWithPromotedEntries,
+    createCombinedInvoice,
+    getCombinedInvoices,
   };
 }

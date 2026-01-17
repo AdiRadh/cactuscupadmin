@@ -4,6 +4,9 @@ import { Badge } from '@/components/ui';
 import { Button } from '@/components/ui/Button';
 import { Card, CardContent } from '@/components/ui/Card';
 import { DeleteConfirmDialog } from '@/components/admin/ConfirmDialog';
+import { FilterBar } from '@/components/admin/FilterBar';
+import { SearchInput, FilterSelect, DateRangeFilter } from '@/components/admin/filters';
+import { SortableTableHeader, TableHeader } from '@/components/admin/SortableTableHeader';
 import {
   Loader2,
   Users,
@@ -19,21 +22,49 @@ import {
   Receipt,
   AlertCircle,
   FileCheck,
+  ShieldCheck,
 } from 'lucide-react';
 import { useWaitlist } from '@/hooks/data/useWaitlist';
-import type { CreateWaitlistEntryData } from '@/hooks/data/useWaitlist';
+import type { CreateWaitlistEntryData, WaitlistVerificationResult } from '@/hooks/data/useWaitlist';
 import { useAdmin } from '@/hooks/data/useAdmin';
+import { useListFilters } from '@/hooks/useListFilters';
 import type { WaitlistEntry, WaitlistStatus, Tournament } from '@/types';
+import {
+  WAITLIST_STATUS_OPTIONS,
+  DEFAULT_WAITLIST_FILTERS,
+  type WaitlistFilters,
+  type WaitlistSortField,
+} from '@/types/filters';
 import { WaitlistEditModal } from './WaitlistEditModal';
 import { WaitlistCreateModal } from './WaitlistCreateModal';
 import { SendInvoicesDialog } from './SendInvoicesDialog';
+import { WaitlistVerificationDialog } from './WaitlistVerificationDialog';
 
 export const WaitlistList: FC = () => {
   const [entries, setEntries] = useState<WaitlistEntry[]>([]);
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
-  const [selectedTournament, setSelectedTournament] = useState<string>('all');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Filter and sort state
+  const {
+    filters,
+    setFilter,
+    resetFilters,
+    hasActiveFilters,
+    sort,
+    toggleSort,
+    getSortDirection,
+    debouncedSearch,
+  } = useListFilters<WaitlistFilters, WaitlistSortField>({
+    defaultFilters: DEFAULT_WAITLIST_FILTERS,
+    defaultSort: { field: 'position', order: 'asc' },
+    paramMapping: {
+      tournamentId: 'tournament',
+      dateFrom: 'from',
+      dateTo: 'to',
+    },
+  });
 
   // Edit modal state
   const [editEntry, setEditEntry] = useState<WaitlistEntry | null>(null);
@@ -50,6 +81,12 @@ export const WaitlistList: FC = () => {
   const [selectedEntries, setSelectedEntries] = useState<Set<string>>(new Set());
   const [isInvoiceDialogOpen, setIsInvoiceDialogOpen] = useState(false);
 
+  // Verification dialog state
+  const [isVerificationDialogOpen, setIsVerificationDialogOpen] = useState(false);
+  const [verificationResult, setVerificationResult] = useState<WaitlistVerificationResult | null>(null);
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [verificationError, setVerificationError] = useState<string | null>(null);
+
   const {
     getWaitlistEntries,
     createWaitlistEntry,
@@ -58,6 +95,7 @@ export const WaitlistList: FC = () => {
     promoteWaitlistUser,
     calculateInvoices,
     sendInvoices,
+    verifyWaitlistRegistrations,
   } = useWaitlist();
   const { listTournaments } = useAdmin();
 
@@ -73,7 +111,7 @@ export const WaitlistList: FC = () => {
       setTournaments(tournamentData);
 
       // Fetch waitlist entries
-      const tournamentId = selectedTournament === 'all' ? undefined : selectedTournament;
+      const tournamentId = filters.tournamentId === 'all' ? undefined : filters.tournamentId;
       const waitlistData = await getWaitlistEntries(tournamentId);
       setEntries(waitlistData);
     } catch (err) {
@@ -82,13 +120,73 @@ export const WaitlistList: FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [listTournaments, getWaitlistEntries, selectedTournament]);
+  }, [listTournaments, getWaitlistEntries, filters.tournamentId]);
 
   useEffect(() => {
     fetchData();
   }, [fetchData]);
 
-  // Stats calculations
+  // Client-side filtering and sorting
+  const filteredAndSortedEntries = useMemo(() => {
+    let result = [...entries];
+
+    // Filter by status
+    if (filters.status) {
+      result = result.filter((e) => e.status === filters.status);
+    }
+
+    // Filter by search (name or email)
+    if (debouncedSearch) {
+      const searchLower = debouncedSearch.toLowerCase();
+      result = result.filter(
+        (e) =>
+          e.firstName.toLowerCase().includes(searchLower) ||
+          e.lastName.toLowerCase().includes(searchLower) ||
+          `${e.firstName} ${e.lastName}`.toLowerCase().includes(searchLower) ||
+          e.email.toLowerCase().includes(searchLower)
+      );
+    }
+
+    // Filter by date range
+    if (filters.dateFrom) {
+      const fromDate = new Date(filters.dateFrom);
+      result = result.filter((e) => new Date(e.joinedAt) >= fromDate);
+    }
+    if (filters.dateTo) {
+      const toDate = new Date(filters.dateTo);
+      toDate.setHours(23, 59, 59, 999);
+      result = result.filter((e) => new Date(e.joinedAt) <= toDate);
+    }
+
+    // Sort
+    if (sort) {
+      result.sort((a, b) => {
+        let comparison = 0;
+        switch (sort.field) {
+          case 'position':
+            comparison = a.position - b.position;
+            break;
+          case 'name':
+            comparison = `${a.firstName} ${a.lastName}`.localeCompare(
+              `${b.firstName} ${b.lastName}`
+            );
+            break;
+          case 'email':
+            comparison = a.email.localeCompare(b.email);
+            break;
+          case 'joinedAt':
+            comparison =
+              new Date(a.joinedAt).getTime() - new Date(b.joinedAt).getTime();
+            break;
+        }
+        return sort.order === 'desc' ? -comparison : comparison;
+      });
+    }
+
+    return result;
+  }, [entries, filters.status, debouncedSearch, filters.dateFrom, filters.dateTo, sort]);
+
+  // Stats calculations (based on all entries, not filtered)
   const stats = useMemo(() => {
     const total = entries.length;
     const waiting = entries.filter((e) => e.status === 'waiting').length;
@@ -100,10 +198,10 @@ export const WaitlistList: FC = () => {
     return { total, waiting, promoted, invoiced, confirmed, cancelled, expired };
   }, [entries]);
 
-  // Entries that can be invoiced (promoted status)
+  // Entries that can be invoiced (promoted status) - from filtered list
   const invoiceableEntries = useMemo(() => {
-    return entries.filter((e) => e.status === 'promoted');
-  }, [entries]);
+    return filteredAndSortedEntries.filter((e) => e.status === 'promoted');
+  }, [filteredAndSortedEntries]);
 
   // Handle selection toggle
   const handleToggleSelection = (entryId: string) => {
@@ -137,9 +235,17 @@ export const WaitlistList: FC = () => {
 
   // Get held spots for selected tournament
   const selectedTournamentData = useMemo(() => {
-    if (selectedTournament === 'all') return null;
-    return tournaments.find((t) => t.id === selectedTournament) || null;
-  }, [selectedTournament, tournaments]);
+    if (filters.tournamentId === 'all') return null;
+    return tournaments.find((t) => t.id === filters.tournamentId) || null;
+  }, [filters.tournamentId, tournaments]);
+
+  // Tournament dropdown options
+  const tournamentOptions = useMemo(() => {
+    return [
+      { value: 'all', label: 'All Tournaments' },
+      ...tournaments.map((t) => ({ value: t.id, label: t.name })),
+    ];
+  }, [tournaments]);
 
   // Handle edit
   const handleEdit = (entry: WaitlistEntry) => {
@@ -179,9 +285,9 @@ export const WaitlistList: FC = () => {
     }
   };
 
-  // Export to CSV
+  // Export to CSV (exports filtered/sorted entries)
   const handleExportCSV = () => {
-    if (entries.length === 0) return;
+    if (filteredAndSortedEntries.length === 0) return;
 
     const headers = [
       'Position',
@@ -194,7 +300,7 @@ export const WaitlistList: FC = () => {
       'Promoted At',
     ];
 
-    const rows = entries.map((entry) => [
+    const rows = filteredAndSortedEntries.map((entry) => [
       entry.position.toString(),
       entry.firstName,
       entry.lastName,
@@ -217,15 +323,48 @@ export const WaitlistList: FC = () => {
     link.href = URL.createObjectURL(blob);
 
     const tournamentName =
-      selectedTournament === 'all'
+      filters.tournamentId === 'all'
         ? 'all-tournaments'
-        : tournaments.find((t) => t.id === selectedTournament)?.name.replace(/[^a-z0-9]/gi, '_') ||
+        : tournaments.find((t) => t.id === filters.tournamentId)?.name.replace(/[^a-z0-9]/gi, '_') ||
           'tournament';
     const date = new Date().toISOString().split('T')[0];
     link.download = `waitlist-${tournamentName}-${date}.csv`;
 
     link.click();
     URL.revokeObjectURL(link.href);
+  };
+
+  // Handle verification
+  const handleVerifyWaitlist = async () => {
+    setIsVerifying(true);
+    setVerificationError(null);
+    setIsVerificationDialogOpen(true);
+
+    try {
+      const tournamentId = filters.tournamentId === 'all' ? undefined : filters.tournamentId;
+      const result = await verifyWaitlistRegistrations(tournamentId);
+      setVerificationResult(result);
+    } catch (err) {
+      console.error('Error verifying waitlist:', err);
+      setVerificationError(err instanceof Error ? err.message : 'Failed to verify waitlist');
+    } finally {
+      setIsVerifying(false);
+    }
+  };
+
+  // Handle removing duplicate from waitlist
+  const handleRemoveFromWaitlist = async (entryId: string) => {
+    try {
+      await deleteWaitlistEntry(entryId);
+      // Refresh verification results
+      const tournamentId = filters.tournamentId === 'all' ? undefined : filters.tournamentId;
+      const result = await verifyWaitlistRegistrations(tournamentId);
+      setVerificationResult(result);
+      // Also refresh the main list
+      await fetchData();
+    } catch (err) {
+      console.error('Error removing waitlist entry:', err);
+    }
   };
 
   const formatDate = (dateString: string | null) => {
@@ -328,6 +467,16 @@ export const WaitlistList: FC = () => {
             Export CSV
           </Button>
           <Button
+            variant="outline"
+            size="sm"
+            onClick={handleVerifyWaitlist}
+            disabled={entries.length === 0}
+            className="border-green-600 text-green-400 hover:bg-green-500/10"
+          >
+            <ShieldCheck className="h-4 w-4 mr-2" />
+            Verify Duplicates
+          </Button>
+          <Button
             size="sm"
             onClick={() => setIsCreateModalOpen(true)}
             className="bg-orange-500 hover:bg-orange-600 text-white"
@@ -338,25 +487,38 @@ export const WaitlistList: FC = () => {
         </div>
       </div>
 
-      {/* Filter */}
-      <div className="flex items-center gap-4">
-        <label htmlFor="tournament-filter" className="text-white font-medium">
-          Filter by Tournament:
-        </label>
-        <select
-          id="tournament-filter"
-          value={selectedTournament}
-          onChange={(e) => setSelectedTournament(e.target.value)}
-          className="h-10 px-3 rounded-md bg-slate-800 border border-slate-600 text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
-        >
-          <option value="all">All Tournaments</option>
-          {tournaments.map((tournament) => (
-            <option key={tournament.id} value={tournament.id}>
-              {tournament.name}
-            </option>
-          ))}
-        </select>
-      </div>
+      {/* Filters */}
+      <FilterBar
+        hasActiveFilters={hasActiveFilters}
+        onReset={resetFilters}
+        title="Filters"
+      >
+        <FilterSelect
+          label="Tournament"
+          value={filters.tournamentId}
+          onChange={(value) => setFilter('tournamentId', value)}
+          options={tournamentOptions}
+        />
+        <FilterSelect
+          label="Status"
+          value={filters.status}
+          onChange={(value) => setFilter('status', value as WaitlistFilters['status'])}
+          options={WAITLIST_STATUS_OPTIONS}
+        />
+        <SearchInput
+          value={filters.search}
+          onChange={(value) => setFilter('search', value)}
+          placeholder="Search name or email..."
+          className="w-64"
+        />
+        <DateRangeFilter
+          label="Joined Date"
+          fromValue={filters.dateFrom}
+          toValue={filters.dateTo}
+          onFromChange={(value) => setFilter('dateFrom', value)}
+          onToChange={(value) => setFilter('dateTo', value)}
+        />
+      </FilterBar>
 
       {/* Stats Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
@@ -437,12 +599,12 @@ export const WaitlistList: FC = () => {
           <Loader2 className="h-8 w-8 animate-spin text-orange-500" />
           <span className="ml-3 text-white">Loading waitlist...</span>
         </div>
-      ) : entries.length === 0 ? (
+      ) : filteredAndSortedEntries.length === 0 ? (
         <div className="text-center py-12 text-slate-500">
           <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
           <p>No waitlist entries found.</p>
-          {selectedTournament !== 'all' && (
-            <p className="mt-2">Try selecting "All Tournaments" to see all entries.</p>
+          {hasActiveFilters && (
+            <p className="mt-2">Try adjusting your filters or click Reset to see all entries.</p>
           )}
         </div>
       ) : (
@@ -465,19 +627,43 @@ export const WaitlistList: FC = () => {
                       title={invoiceableEntries.length === 0 ? 'No promoted entries to select' : 'Select all promoted entries'}
                     />
                   </th>
-                  <th className="text-left py-3 px-4 font-semibold text-white">Pos</th>
-                  <th className="text-left py-3 px-4 font-semibold text-white">Name</th>
-                  <th className="text-left py-3 px-4 font-semibold text-white">Email</th>
-                  {selectedTournament === 'all' && (
-                    <th className="text-left py-3 px-4 font-semibold text-white">Tournament</th>
+                  <SortableTableHeader
+                    field="position"
+                    sortDirection={getSortDirection('position')}
+                    onSort={() => toggleSort('position')}
+                  >
+                    Pos
+                  </SortableTableHeader>
+                  <SortableTableHeader
+                    field="name"
+                    sortDirection={getSortDirection('name')}
+                    onSort={() => toggleSort('name')}
+                  >
+                    Name
+                  </SortableTableHeader>
+                  <SortableTableHeader
+                    field="email"
+                    sortDirection={getSortDirection('email')}
+                    onSort={() => toggleSort('email')}
+                  >
+                    Email
+                  </SortableTableHeader>
+                  {filters.tournamentId === 'all' && (
+                    <TableHeader>Tournament</TableHeader>
                   )}
-                  <th className="text-left py-3 px-4 font-semibold text-white">Joined</th>
-                  <th className="text-left py-3 px-4 font-semibold text-white">Status</th>
-                  <th className="text-right py-3 px-4 font-semibold text-white">Actions</th>
+                  <SortableTableHeader
+                    field="joinedAt"
+                    sortDirection={getSortDirection('joinedAt')}
+                    onSort={() => toggleSort('joinedAt')}
+                  >
+                    Joined
+                  </SortableTableHeader>
+                  <TableHeader>Status</TableHeader>
+                  <TableHeader align="right">Actions</TableHeader>
                 </tr>
               </thead>
               <tbody>
-                {entries.map((entry) => {
+                {filteredAndSortedEntries.map((entry) => {
                   const isInvoiceable = entry.status === 'promoted';
                   const isSelected = selectedEntries.has(entry.id);
 
@@ -507,7 +693,7 @@ export const WaitlistList: FC = () => {
                         {entry.firstName} {entry.lastName}
                       </td>
                       <td className="py-3 px-4 text-slate-300">{entry.email}</td>
-                      {selectedTournament === 'all' && (
+                      {filters.tournamentId === 'all' && (
                         <td className="py-3 px-4 text-slate-300">{entry.tournamentName}</td>
                       )}
                       <td className="py-3 px-4 text-slate-400 text-sm">
@@ -549,7 +735,7 @@ export const WaitlistList: FC = () => {
         onOpenChange={setIsCreateModalOpen}
         tournaments={tournaments}
         onSave={handleCreate}
-        preselectedTournamentId={selectedTournament !== 'all' ? selectedTournament : undefined}
+        preselectedTournamentId={filters.tournamentId !== 'all' ? filters.tournamentId : undefined}
       />
 
       {/* Edit Modal */}
@@ -582,6 +768,16 @@ export const WaitlistList: FC = () => {
         calculateInvoices={calculateInvoices}
         sendInvoices={sendInvoices}
         onSuccess={handleInvoiceSent}
+      />
+
+      {/* Verification Dialog */}
+      <WaitlistVerificationDialog
+        open={isVerificationDialogOpen}
+        onOpenChange={setIsVerificationDialogOpen}
+        verificationResult={verificationResult}
+        isLoading={isVerifying}
+        error={verificationError}
+        onRemoveFromWaitlist={handleRemoveFromWaitlist}
       />
     </div>
   );

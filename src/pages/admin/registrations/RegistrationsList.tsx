@@ -1,13 +1,24 @@
 import type { FC } from 'react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui';
+import { FilterBar } from '@/components/admin/FilterBar';
+import { SearchInput, FilterSelect, DateRangeFilter } from '@/components/admin/filters';
+import { SortableTableHeader, TableHeader } from '@/components/admin/SortableTableHeader';
 import { Eye, Download, AlertTriangle, RefreshCw, FileCheck, FileClock, FileX, ShieldCheck, CheckCircle2, XCircle, ChevronDown, ChevronUp, UserPlus, Link2, Users, Ticket } from 'lucide-react';
 import { supabaseAdmin, hasAdminClient, supabase } from '@/lib/api/supabase';
 import { RegistrationDetailModal } from './RegistrationDetailModal';
 import { AddTournamentEntryModal } from './AddTournamentEntryModal';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/Tabs';
+import { useListFilters } from '@/hooks/useListFilters';
+import {
+  PAYMENT_STATUS_OPTIONS,
+  WAIVER_STATUS_OPTIONS,
+  DEFAULT_REGISTRATION_FILTERS,
+  type RegistrationFilters,
+  type RegistrationSortField,
+} from '@/types/filters';
 import { bulkVerifyOrdersWithStripe, syncOrderFromStripe, findMissingRegistrations, verifyRegistrationSync, type BulkVerificationSummary, type MissingRegistrationsSummary, type SyncVerificationSummary } from '@/lib/utils/stripe';
 
 interface WaiverStatus {
@@ -70,6 +81,152 @@ export const RegistrationsList: FC = () => {
 
   const adminConfigured = hasAdminClient();
   const client = supabaseAdmin ?? supabase;
+
+  // Filter and sort state
+  const {
+    filters,
+    setFilter,
+    resetFilters,
+    hasActiveFilters,
+    sort,
+    toggleSort,
+    getSortDirection,
+    debouncedSearch,
+  } = useListFilters<RegistrationFilters, RegistrationSortField>({
+    defaultFilters: DEFAULT_REGISTRATION_FILTERS,
+    defaultSort: { field: 'registeredAt', order: 'desc' },
+    paramMapping: {
+      paymentStatus: 'payment',
+      waiverStatus: 'waiver',
+      eventYear: 'year',
+      dateFrom: 'from',
+      dateTo: 'to',
+    },
+  });
+
+  // Get unique event years for dropdown
+  const eventYearOptions = useMemo(() => {
+    const years = [...new Set(registrations.map((r) => r.event_year))].sort(
+      (a, b) => b - a
+    );
+    return [
+      { value: '', label: 'All Years' },
+      ...years.map((year) => ({ value: String(year), label: String(year) })),
+    ];
+  }, [registrations]);
+
+  // Client-side filtering and sorting
+  const filteredAndSortedRegistrations = useMemo(() => {
+    // First filter by tab
+    let result = registrations;
+    if (activeTab === 'paid') {
+      result = result.filter((r) => r.registration_fee > 0);
+    } else if (activeTab === 'spectators') {
+      result = result.filter((r) => r.registration_fee === 0);
+    }
+
+    // Filter by payment status
+    if (filters.paymentStatus) {
+      result = result.filter((r) => r.payment_status === filters.paymentStatus);
+    }
+
+    // Filter by waiver status
+    if (filters.waiverStatus) {
+      if (filters.waiverStatus === 'signed') {
+        result = result.filter((r) => r.waiver.status === 'signed');
+      } else if (filters.waiverStatus === 'pending') {
+        result = result.filter(
+          (r) =>
+            r.waiver.status === 'pending' ||
+            r.waiver.status === 'sent' ||
+            r.waiver.status === 'viewed'
+        );
+      } else if (filters.waiverStatus === 'none') {
+        result = result.filter(
+          (r) => r.waiver.status === 'none' || r.waiver.status === 'error'
+        );
+      }
+    }
+
+    // Filter by club
+    if (filters.club) {
+      const clubLower = filters.club.toLowerCase();
+      result = result.filter((r) =>
+        r.club?.toLowerCase().includes(clubLower)
+      );
+    }
+
+    // Filter by event year
+    if (filters.eventYear) {
+      result = result.filter((r) => r.event_year === parseInt(filters.eventYear, 10));
+    }
+
+    // Filter by search (name or email)
+    if (debouncedSearch) {
+      const searchLower = debouncedSearch.toLowerCase();
+      result = result.filter(
+        (r) =>
+          (r.first_name?.toLowerCase() || '').includes(searchLower) ||
+          (r.last_name?.toLowerCase() || '').includes(searchLower) ||
+          `${r.first_name || ''} ${r.last_name || ''}`.toLowerCase().includes(searchLower) ||
+          (r.email?.toLowerCase() || '').includes(searchLower)
+      );
+    }
+
+    // Filter by date range
+    if (filters.dateFrom) {
+      const fromDate = new Date(filters.dateFrom);
+      result = result.filter(
+        (r) => new Date(r.registered_at || r.created_at) >= fromDate
+      );
+    }
+    if (filters.dateTo) {
+      const toDate = new Date(filters.dateTo);
+      toDate.setHours(23, 59, 59, 999);
+      result = result.filter(
+        (r) => new Date(r.registered_at || r.created_at) <= toDate
+      );
+    }
+
+    // Sort
+    if (sort) {
+      result = [...result].sort((a, b) => {
+        let comparison = 0;
+        switch (sort.field) {
+          case 'name':
+            const nameA = `${a.first_name || ''} ${a.last_name || ''}`.trim();
+            const nameB = `${b.first_name || ''} ${b.last_name || ''}`.trim();
+            comparison = nameA.localeCompare(nameB);
+            break;
+          case 'club':
+            comparison = (a.club || '').localeCompare(b.club || '');
+            break;
+          case 'fee':
+            comparison = a.registration_fee - b.registration_fee;
+            break;
+          case 'registeredAt':
+            comparison =
+              new Date(a.registered_at || a.created_at).getTime() -
+              new Date(b.registered_at || b.created_at).getTime();
+            break;
+        }
+        return sort.order === 'desc' ? -comparison : comparison;
+      });
+    }
+
+    return result;
+  }, [
+    registrations,
+    activeTab,
+    filters.paymentStatus,
+    filters.waiverStatus,
+    filters.club,
+    filters.eventYear,
+    debouncedSearch,
+    filters.dateFrom,
+    filters.dateTo,
+    sort,
+  ]);
 
   const fetchRegistrations = async () => {
     setIsLoading(true);
@@ -502,6 +659,45 @@ export const RegistrationsList: FC = () => {
           </Button>
         </div>
       </div>
+
+      {/* Filters */}
+      <FilterBar
+        hasActiveFilters={hasActiveFilters}
+        onReset={resetFilters}
+        title="Filters"
+      >
+        <FilterSelect
+          label="Payment Status"
+          value={filters.paymentStatus}
+          onChange={(value) => setFilter('paymentStatus', value as RegistrationFilters['paymentStatus'])}
+          options={PAYMENT_STATUS_OPTIONS}
+        />
+        <FilterSelect
+          label="Waiver Status"
+          value={filters.waiverStatus}
+          onChange={(value) => setFilter('waiverStatus', value as RegistrationFilters['waiverStatus'])}
+          options={WAIVER_STATUS_OPTIONS}
+        />
+        <FilterSelect
+          label="Year"
+          value={filters.eventYear}
+          onChange={(value) => setFilter('eventYear', value)}
+          options={eventYearOptions}
+        />
+        <SearchInput
+          value={filters.search}
+          onChange={(value) => setFilter('search', value)}
+          placeholder="Search name or email..."
+          className="w-64"
+        />
+        <DateRangeFilter
+          label="Registration Date"
+          fromValue={filters.dateFrom}
+          toValue={filters.dateTo}
+          onFromChange={(value) => setFilter('dateFrom', value)}
+          onToChange={(value) => setFilter('dateTo', value)}
+        />
+      </FilterBar>
 
       {/* Warning if admin client not configured */}
       {!adminConfigured && (
@@ -1208,55 +1404,48 @@ export const RegistrationsList: FC = () => {
 
       {/* Registrations Table with Tabs */}
       {(() => {
-        // Filter registrations based on active tab
-        const paidRegistrations = registrations.filter(r => r.registration_fee > 0);
-        const spectatorRegistrations = registrations.filter(r => r.registration_fee === 0);
-
-        const getFilteredRegistrations = () => {
-          switch (activeTab) {
-            case 'paid':
-              return paidRegistrations;
-            case 'spectators':
-              return spectatorRegistrations;
-            default:
-              return registrations;
-          }
-        };
-
-        const filteredRegistrations = getFilteredRegistrations();
+        // Tab counts (based on unfiltered data)
+        const paidCount = registrations.filter(r => r.registration_fee > 0).length;
+        const spectatorCount = registrations.filter(r => r.registration_fee === 0).length;
 
         const renderTable = (regs: RegistrationWithProfile[]) => (
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
                 <tr className="border-b border-white/20">
-                  <th className="text-left py-3 px-4 font-semibold text-white">
+                  <SortableTableHeader
+                    field="name"
+                    sortDirection={getSortDirection('name')}
+                    onSort={() => toggleSort('name')}
+                  >
                     Name
-                  </th>
-                  <th className="text-left py-3 px-4 font-semibold text-white">
-                    Email
-                  </th>
-                  <th className="text-left py-3 px-4 font-semibold text-white">
+                  </SortableTableHeader>
+                  <TableHeader>Email</TableHeader>
+                  <SortableTableHeader
+                    field="club"
+                    sortDirection={getSortDirection('club')}
+                    onSort={() => toggleSort('club')}
+                  >
                     Club
-                  </th>
-                  <th className="text-left py-3 px-4 font-semibold text-white">
-                    Year
-                  </th>
-                  <th className="text-left py-3 px-4 font-semibold text-white">
+                  </SortableTableHeader>
+                  <TableHeader>Year</TableHeader>
+                  <SortableTableHeader
+                    field="fee"
+                    sortDirection={getSortDirection('fee')}
+                    onSort={() => toggleSort('fee')}
+                  >
                     Fee
-                  </th>
-                  <th className="text-left py-3 px-4 font-semibold text-white">
-                    Payment
-                  </th>
-                  <th className="text-left py-3 px-4 font-semibold text-white">
-                    Waiver
-                  </th>
-                  <th className="text-left py-3 px-4 font-semibold text-white">
+                  </SortableTableHeader>
+                  <TableHeader>Payment</TableHeader>
+                  <TableHeader>Waiver</TableHeader>
+                  <SortableTableHeader
+                    field="registeredAt"
+                    sortDirection={getSortDirection('registeredAt')}
+                    onSort={() => toggleSort('registeredAt')}
+                  >
                     Registered
-                  </th>
-                  <th className="text-right py-3 px-4 font-semibold text-white">
-                    Actions
-                  </th>
+                  </SortableTableHeader>
+                  <TableHeader align="right">Actions</TableHeader>
                 </tr>
               </thead>
               <tbody>
@@ -1340,7 +1529,7 @@ export const RegistrationsList: FC = () => {
           <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
-                <CardTitle>Registrations</CardTitle>
+                <CardTitle>Registrations ({filteredAndSortedRegistrations.length})</CardTitle>
                 <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)}>
                   <TabsList>
                     <TabsTrigger value="all" className="gap-2">
@@ -1349,11 +1538,11 @@ export const RegistrationsList: FC = () => {
                     </TabsTrigger>
                     <TabsTrigger value="paid" className="gap-2">
                       <Ticket className="h-4 w-4" />
-                      Event Registrations ({paidRegistrations.length})
+                      Event Registrations ({paidCount})
                     </TabsTrigger>
                     <TabsTrigger value="spectators" className="gap-2">
                       <Eye className="h-4 w-4" />
-                      Spectators ({spectatorRegistrations.length})
+                      Spectators ({spectatorCount})
                     </TabsTrigger>
                   </TabsList>
                 </Tabs>
@@ -1365,10 +1554,12 @@ export const RegistrationsList: FC = () => {
                   <RefreshCw className="h-6 w-6 animate-spin mx-auto mb-2" />
                   Loading registrations...
                 </div>
-              ) : filteredRegistrations.length === 0 ? (
+              ) : filteredAndSortedRegistrations.length === 0 ? (
                 <div className="text-center py-8 text-white">
                   {error
                     ? 'Failed to load registrations.'
+                    : hasActiveFilters
+                    ? 'No registrations match your filters. Try adjusting or resetting filters.'
                     : adminConfigured
                     ? activeTab === 'all'
                       ? 'No registrations found.'
@@ -1378,7 +1569,7 @@ export const RegistrationsList: FC = () => {
                     : 'No registrations visible. Configure the service role key to bypass RLS.'}
                 </div>
               ) : (
-                renderTable(filteredRegistrations)
+                renderTable(filteredAndSortedRegistrations)
               )}
             </CardContent>
           </Card>

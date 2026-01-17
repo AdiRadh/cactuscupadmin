@@ -41,6 +41,7 @@ import { EmailTemplatesList } from '@/pages/admin/email-templates/EmailTemplates
 import { EventRegistrationSettings } from '@/pages/admin/event-registration-settings/EventRegistrationSettings';
 import { WaiverSettings } from '@/pages/admin/waiver-settings/WaiverSettings';
 import { WaitlistList } from '@/pages/admin/waitlist/WaitlistList';
+import { PendingBilling } from '@/pages/admin/billing/PendingBilling';
 
 /**
  * Admin Panel App component
@@ -187,6 +188,13 @@ export const App: FC = () => {
               label: 'Waitlist',
             },
           },
+          {
+            name: 'pending_billing',
+            list: '/pending-billing',
+            meta: {
+              label: 'Pending Billing',
+            },
+          },
         ]}
         options={{
           syncWithLocation: true,
@@ -239,6 +247,7 @@ export const App: FC = () => {
                     <Route path="/email-templates" element={<EmailTemplatesList />} />
                     <Route path="/waiver-settings" element={<WaiverSettings />} />
                     <Route path="/waitlist" element={<WaitlistList />} />
+                    <Route path="/pending-billing" element={<PendingBilling />} />
                     <Route path="*" element={<Navigate to="/" replace />} />
                   </Routes>
                 </AdminLayout>

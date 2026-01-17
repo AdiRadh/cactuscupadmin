@@ -21,16 +21,12 @@ import { Badge } from '@/components/ui';
 import { Button } from '@/components/ui/Button';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Checkbox } from '@/components/ui/Checkbox';
-import { Loader2, Swords, ShoppingBag, Calendar, DollarSign, ShieldCheck, AlertTriangle, CheckCircle2, XCircle, Clock, RefreshCw, Trash2, Plus } from 'lucide-react';
+import { Loader2, Swords, ShoppingBag, Calendar, DollarSign, Trash2, Plus } from 'lucide-react';
 import { supabaseAdmin, supabase } from '@/lib/api/supabase';
 import {
-  verifyOrdersWithStripe,
-  syncOrderFromStripe,
   removeTournamentRegistration,
   removeOrderItem,
   removeEventRegistration,
-  type StripeVerificationResult,
-  type OrderVerificationItem,
 } from '@/lib/utils/stripe';
 import { AddTournamentEntryModal } from './AddTournamentEntryModal';
 
@@ -101,10 +97,6 @@ export const RegistrationDetailModal: FC<RegistrationDetailModalProps> = ({
   const [addons, setAddons] = useState<AddonPurchase[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [isVerifying, setIsVerifying] = useState(false);
-  const [verificationResult, setVerificationResult] = useState<StripeVerificationResult | null>(null);
-  const [verificationError, setVerificationError] = useState<string | null>(null);
-  const [syncingOrderId, setSyncingOrderId] = useState<string | null>(null);
   const [removeDialog, setRemoveDialog] = useState<RemoveDialogState>({
     open: false,
     type: 'tournament',
@@ -121,84 +113,8 @@ export const RegistrationDetailModal: FC<RegistrationDetailModalProps> = ({
   useEffect(() => {
     if (open && registration) {
       fetchPurchaseDetails();
-      // Reset verification state when opening for a new registration
-      setVerificationResult(null);
-      setVerificationError(null);
     }
   }, [open, registration]);
-
-  const handleVerifyStripe = async () => {
-    if (!registration) return;
-
-    setIsVerifying(true);
-    setVerificationError(null);
-    setVerificationResult(null);
-
-    try {
-      const result = await verifyOrdersWithStripe(registration.user_id);
-      setVerificationResult(result);
-    } catch (err) {
-      console.error('Verification error:', err);
-      setVerificationError(err instanceof Error ? err.message : 'Failed to verify with Stripe');
-    } finally {
-      setIsVerifying(false);
-    }
-  };
-
-  const getVerificationStatusIcon = (status: OrderVerificationItem['status']) => {
-    switch (status) {
-      case 'match':
-        return <CheckCircle2 className="h-4 w-4 text-green-400" />;
-      case 'mismatch':
-        return <XCircle className="h-4 w-4 text-red-400" />;
-      case 'pending':
-        return <Clock className="h-4 w-4 text-yellow-400" />;
-      case 'no_stripe_data':
-        return <AlertTriangle className="h-4 w-4 text-orange-400" />;
-      case 'error':
-        return <XCircle className="h-4 w-4 text-red-400" />;
-      default:
-        return null;
-    }
-  };
-
-  const getVerificationStatusBadge = (status: OrderVerificationItem['status']) => {
-    switch (status) {
-      case 'match':
-        return <Badge variant="success">Match</Badge>;
-      case 'mismatch':
-        return <Badge variant="destructive">Mismatch</Badge>;
-      case 'pending':
-        return <Badge variant="warning">Pending</Badge>;
-      case 'no_stripe_data':
-        return <Badge variant="secondary">No Stripe Data</Badge>;
-      case 'error':
-        return <Badge variant="destructive">Error</Badge>;
-      default:
-        return <Badge variant="outline">{status}</Badge>;
-    }
-  };
-
-  const handleSyncFromStripe = async (orderId: string) => {
-    setSyncingOrderId(orderId);
-
-    try {
-      const result = await syncOrderFromStripe(orderId);
-      if (result.success) {
-        // Re-verify to show updated results
-        await handleVerifyStripe();
-        // Also refresh purchase details to update the UI
-        await fetchPurchaseDetails();
-      } else {
-        setVerificationError(result.error || 'Failed to sync order');
-      }
-    } catch (err) {
-      console.error('Sync error:', err);
-      setVerificationError(err instanceof Error ? err.message : 'Failed to sync from Stripe');
-    } finally {
-      setSyncingOrderId(null);
-    }
-  };
 
   const openRemoveDialog = (
     type: RemoveItemType,
@@ -458,7 +374,7 @@ export const RegistrationDetailModal: FC<RegistrationDetailModalProps> = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto bg-slate-900 border-slate-700">
+      <DialogContent className="max-w-2xl w-[95vw] sm:w-full max-h-[85vh] overflow-y-auto overflow-x-hidden bg-slate-900 border-slate-700">
         <DialogHeader>
           <DialogTitle className="text-white text-xl">{userName}</DialogTitle>
           <DialogDescription className="text-slate-400">
@@ -481,9 +397,9 @@ export const RegistrationDetailModal: FC<RegistrationDetailModalProps> = ({
             {/* Event Registration Summary */}
             <Card className="bg-slate-800 border-slate-700">
               <CardContent className="pt-4">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                   <div className="flex items-center gap-2">
-                    <Calendar className="h-5 w-5 text-slate-400" />
+                    <Calendar className="h-5 w-5 text-slate-400 shrink-0" />
                     <span className="font-medium text-white">Event Registration</span>
                   </div>
                   <div className="flex items-center gap-2">
@@ -502,7 +418,7 @@ export const RegistrationDetailModal: FC<RegistrationDetailModalProps> = ({
                     </Button>
                   </div>
                 </div>
-                <div className="mt-2 grid grid-cols-2 gap-4 text-sm">
+                <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-4 text-sm">
                   <div>
                     <span className="text-slate-400">Registration Fee:</span>
                     <span className="ml-2 text-white">{formatCurrency(registration.registration_fee)}</span>
@@ -517,16 +433,16 @@ export const RegistrationDetailModal: FC<RegistrationDetailModalProps> = ({
 
             {/* Tournaments Section */}
             <div>
-              <div className="flex items-center justify-between mb-3">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-3">
                 <div className="flex items-center gap-2">
-                  <Swords className="h-5 w-5 text-slate-400" />
+                  <Swords className="h-5 w-5 text-slate-400 shrink-0" />
                   <h3 className="font-semibold text-white">Tournaments ({tournaments.length})</h3>
                 </div>
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={() => setIsAddTournamentModalOpen(true)}
-                  className="border-slate-600 text-white hover:bg-slate-700"
+                  className="border-slate-600 text-white hover:bg-slate-700 w-full sm:w-auto"
                 >
                   <Plus className="h-4 w-4 mr-1" />
                   Add Tournament
@@ -539,36 +455,38 @@ export const RegistrationDetailModal: FC<RegistrationDetailModalProps> = ({
                   {tournaments.map((tournament) => (
                     <Card key={tournament.id} className="bg-slate-800 border-slate-700">
                       <CardContent className="py-3">
-                        <div className="flex items-center justify-between">
-                          <div className="flex-1">
-                            <p className="font-medium text-white">{tournament.tournament_name}</p>
-                            <div className="flex items-center gap-2 mt-1">
+                        <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-0">
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium text-white truncate">{tournament.tournament_name}</p>
+                            <div className="flex flex-wrap items-center gap-2 mt-1">
                               {getWeaponBadge(tournament.weapon)}
                               {tournament.division && (
                                 <span className="text-xs text-slate-400">{tournament.division}</span>
                               )}
                             </div>
                           </div>
-                          <div className="text-right mr-3">
-                            <p className="text-white font-medium">{formatCurrency(tournament.amount_paid)}</p>
-                            {getPaymentBadge(tournament.payment_status)}
+                          <div className="flex items-center justify-between sm:justify-end gap-2">
+                            <div className="text-left sm:text-right sm:mr-3">
+                              <p className="text-white font-medium">{formatCurrency(tournament.amount_paid)}</p>
+                              {getPaymentBadge(tournament.payment_status)}
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-red-400 hover:text-red-300 hover:bg-red-500/10 shrink-0"
+                              onClick={() => openRemoveDialog(
+                                'tournament',
+                                tournament.id,
+                                tournament.tournament_name,
+                                tournament.tournament_id,
+                                undefined,
+                                undefined,
+                                tournament.stripe_payment_intent_id || undefined
+                              )}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
                           </div>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
-                            onClick={() => openRemoveDialog(
-                              'tournament',
-                              tournament.id,
-                              tournament.tournament_name,
-                              tournament.tournament_id,
-                              undefined,
-                              undefined,
-                              tournament.stripe_payment_intent_id || undefined
-                            )}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
                         </div>
                       </CardContent>
                     </Card>
@@ -580,7 +498,7 @@ export const RegistrationDetailModal: FC<RegistrationDetailModalProps> = ({
             {/* Add-ons Section */}
             <div>
               <div className="flex items-center gap-2 mb-3">
-                <ShoppingBag className="h-5 w-5 text-slate-400" />
+                <ShoppingBag className="h-5 w-5 text-slate-400 shrink-0" />
                 <h3 className="font-semibold text-white">Add-ons & Merchandise ({addons.length})</h3>
               </div>
               {addons.length === 0 ? (
@@ -590,10 +508,10 @@ export const RegistrationDetailModal: FC<RegistrationDetailModalProps> = ({
                   {addons.map((addon) => (
                     <Card key={addon.id} className="bg-slate-800 border-slate-700">
                       <CardContent className="py-3">
-                        <div className="flex items-center justify-between">
-                          <div className="flex-1">
-                            <p className="font-medium text-white">{addon.item_name}</p>
-                            <div className="flex items-center gap-2 mt-1 text-xs text-slate-400">
+                        <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-0">
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium text-white truncate">{addon.item_name}</p>
+                            <div className="flex flex-wrap items-center gap-2 mt-1 text-xs text-slate-400">
                               {addon.variant_name && (
                                 <span className="bg-slate-700 px-2 py-0.5 rounded">{addon.variant_name}</span>
                               )}
@@ -603,27 +521,29 @@ export const RegistrationDetailModal: FC<RegistrationDetailModalProps> = ({
                               )}
                             </div>
                           </div>
-                          <div className="text-right mr-3">
-                            <p className="text-white font-medium">{formatCurrency(addon.total)}</p>
-                            <span className="text-xs text-slate-400">
-                              {formatCurrency(addon.unit_price)} each
-                            </span>
+                          <div className="flex items-center justify-between sm:justify-end gap-2">
+                            <div className="text-left sm:text-right sm:mr-3">
+                              <p className="text-white font-medium">{formatCurrency(addon.total)}</p>
+                              <span className="text-xs text-slate-400">
+                                {formatCurrency(addon.unit_price)} each
+                              </span>
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-red-400 hover:text-red-300 hover:bg-red-500/10 shrink-0"
+                              onClick={() => openRemoveDialog(
+                                'addon',
+                                addon.id,
+                                addon.item_name,
+                                addon.addon_id || undefined,
+                                addon.quantity,
+                                addon.order_id || undefined
+                              )}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
                           </div>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
-                            onClick={() => openRemoveDialog(
-                              'addon',
-                              addon.id,
-                              addon.item_name,
-                              addon.addon_id || undefined,
-                              addon.quantity,
-                              addon.order_id || undefined
-                            )}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
                         </div>
                       </CardContent>
                     </Card>
@@ -651,168 +571,6 @@ export const RegistrationDetailModal: FC<RegistrationDetailModalProps> = ({
               </CardContent>
             </Card>
 
-            {/* Stripe Verification Section */}
-            <div className="pt-4 border-t border-slate-600">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2">
-                  <ShieldCheck className="h-5 w-5 text-slate-400" />
-                  <h3 className="font-semibold text-white">Stripe Verification</h3>
-                </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleVerifyStripe}
-                  disabled={isVerifying}
-                >
-                  {isVerifying ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Verifying...
-                    </>
-                  ) : (
-                    <>
-                      <ShieldCheck className="h-4 w-4 mr-2" />
-                      Verify with Stripe
-                    </>
-                  )}
-                </Button>
-              </div>
-
-              {verificationError && (
-                <Card className="bg-red-500/10 border-red-500/30">
-                  <CardContent className="py-3">
-                    <div className="flex items-center gap-2 text-red-400">
-                      <AlertTriangle className="h-4 w-4" />
-                      <span className="text-sm">{verificationError}</span>
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-
-              {verificationResult && (
-                <div className="space-y-3">
-                  {/* Summary */}
-                  <Card className="bg-slate-800 border-slate-700">
-                    <CardContent className="py-3">
-                      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-center text-sm">
-                        <div>
-                          <p className="text-slate-400">Total Orders</p>
-                          <p className="font-semibold text-white">{verificationResult.totalOrders}</p>
-                        </div>
-                        <div>
-                          <p className="text-slate-400">Matched</p>
-                          <p className="font-semibold text-green-400">{verificationResult.matchedOrders}</p>
-                        </div>
-                        <div>
-                          <p className="text-slate-400">Mismatched</p>
-                          <p className="font-semibold text-red-400">{verificationResult.mismatchedOrders}</p>
-                        </div>
-                        <div>
-                          <p className="text-slate-400">Pending</p>
-                          <p className="font-semibold text-yellow-400">{verificationResult.pendingOrders}</p>
-                        </div>
-                        <div>
-                          <p className="text-slate-400">No Data</p>
-                          <p className="font-semibold text-orange-400">{verificationResult.noStripeDataOrders}</p>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  {/* Individual Order Results */}
-                  {verificationResult.orders.length > 0 && (
-                    <div className="space-y-2">
-                      <p className="text-sm text-slate-400">Order Details:</p>
-                      {verificationResult.orders.map((order) => (
-                        <Card key={order.orderId} className="bg-slate-800 border-slate-700">
-                          <CardContent className="py-3">
-                            <div className="flex items-center justify-between mb-2">
-                              <div className="flex items-center gap-2">
-                                {getVerificationStatusIcon(order.status)}
-                                <span className="font-medium text-white">
-                                  Order #{order.orderNumber}
-                                </span>
-                              </div>
-                              {getVerificationStatusBadge(order.status)}
-                            </div>
-                            <div className="grid grid-cols-2 gap-2 text-sm">
-                              <div>
-                                <span className="text-slate-400">DB Total: </span>
-                                <span className="text-white">{formatCurrency(order.dbTotal)}</span>
-                              </div>
-                              <div>
-                                <span className="text-slate-400">Stripe Total: </span>
-                                <span className="text-white">
-                                  {order.stripeTotal !== null ? formatCurrency(order.stripeTotal) : 'N/A'}
-                                </span>
-                              </div>
-                            </div>
-                            {order.errorMessage && (
-                              <p className="text-xs text-red-400 mt-2">{order.errorMessage}</p>
-                            )}
-                            {order.status === 'mismatch' && order.stripeItems && (
-                              <div className="mt-3 pt-3 border-t border-slate-700">
-                                <div className="grid grid-cols-2 gap-4 text-xs">
-                                  <div>
-                                    <p className="text-slate-400 mb-1">DB Items ({order.dbItems.length}):</p>
-                                    {order.dbItems.map((item, idx) => (
-                                      <p key={idx} className="text-slate-300">
-                                        {item.quantity}x {item.name} - {formatCurrency(item.total)}
-                                      </p>
-                                    ))}
-                                  </div>
-                                  <div>
-                                    <p className="text-slate-400 mb-1">Stripe Items ({order.stripeItems.length}):</p>
-                                    {order.stripeItems.map((item, idx) => (
-                                      <p key={idx} className="text-slate-300">
-                                        {item.quantity}x {item.name} - {formatCurrency(item.total)}
-                                      </p>
-                                    ))}
-                                  </div>
-                                </div>
-                                <div className="mt-3 flex justify-end">
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => handleSyncFromStripe(order.orderId)}
-                                    disabled={syncingOrderId === order.orderId}
-                                    className="text-xs"
-                                  >
-                                    {syncingOrderId === order.orderId ? (
-                                      <>
-                                        <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-                                        Syncing...
-                                      </>
-                                    ) : (
-                                      <>
-                                        <RefreshCw className="h-3 w-3 mr-1" />
-                                        Sync from Stripe
-                                      </>
-                                    )}
-                                  </Button>
-                                </div>
-                              </div>
-                            )}
-                          </CardContent>
-                        </Card>
-                      ))}
-                    </div>
-                  )}
-
-                  {verificationResult.orders.length === 0 && (
-                    <p className="text-sm text-slate-500 text-center py-4">
-                      No orders found for this user.
-                    </p>
-                  )}
-                </div>
-              )}
-
-              {!verificationResult && !verificationError && !isVerifying && (
-                <p className="text-sm text-slate-500 text-center py-4">
-                  Click "Verify with Stripe" to compare order items with Stripe transactions.
-                </p>
-              )}
-            </div>
           </div>
         )}
       </DialogContent>
@@ -831,7 +589,7 @@ export const RegistrationDetailModal: FC<RegistrationDetailModalProps> = ({
 
       {/* Remove Item Confirmation Dialog */}
       <AlertDialog open={removeDialog.open} onOpenChange={(open) => !open && closeRemoveDialog()}>
-        <AlertDialogContent className="bg-slate-900 border-slate-700">
+        <AlertDialogContent className="bg-slate-900 border-slate-700 w-[95vw] sm:w-full max-w-md">
           <AlertDialogHeader>
             <AlertDialogTitle className="text-white">Remove {removeDialog.type === 'registration' ? 'Registration' : removeDialog.type === 'tournament' ? 'Tournament' : 'Item'}</AlertDialogTitle>
             <AlertDialogDescription className="text-slate-400">
@@ -862,9 +620,9 @@ export const RegistrationDetailModal: FC<RegistrationDetailModalProps> = ({
             </div>
           )}
 
-          <AlertDialogFooter>
+          <AlertDialogFooter className="flex-col-reverse sm:flex-row gap-2 sm:gap-0">
             <AlertDialogCancel
-              className="bg-slate-800 text-white hover:bg-slate-700 border-slate-600"
+              className="bg-slate-800 text-white hover:bg-slate-700 border-slate-600 w-full sm:w-auto"
               disabled={isRemoving}
             >
               Cancel
@@ -874,7 +632,7 @@ export const RegistrationDetailModal: FC<RegistrationDetailModalProps> = ({
                 e.preventDefault();
                 handleRemoveItem();
               }}
-              className="bg-red-600 text-white hover:bg-red-700"
+              className="bg-red-600 text-white hover:bg-red-700 w-full sm:w-auto"
               disabled={isRemoving}
             >
               {isRemoving ? (

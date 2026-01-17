@@ -5,13 +5,25 @@ import { Link } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui';
+import { FilterBar } from '@/components/admin/FilterBar';
+import { FilterSelect } from '@/components/admin/filters';
+import { SortableTableHeader, TableHeader } from '@/components/admin/SortableTableHeader';
 import { Plus, Edit, Trash2, Package, RefreshCw, Layers, Users } from 'lucide-react';
 import { DeleteConfirmDialog } from '@/components/admin/ConfirmDialog';
 import { AddonPurchasersModal } from './AddonPurchasersModal';
 import { useAdmin } from '@/hooks';
+import { useListFilters } from '@/hooks/useListFilters';
 import { formatPrice } from '@/lib/utils/formatting';
 import type { Addon, DbAddon } from '@/types';
 import { dbToAddon } from '@/types';
+import {
+  ADDON_CATEGORY_OPTIONS,
+  ACTIVE_STATUS_OPTIONS,
+  IN_STOCK_OPTIONS,
+  DEFAULT_ADDON_FILTERS,
+  type AddonFilters,
+  type AddonSortField,
+} from '@/types/filters';
 import { syncAddonPricing, bulkSyncAddonsToStripe } from '@/lib/utils/stripe';
 import { supabaseAdmin, supabase } from '@/lib/api/supabase';
 
@@ -32,6 +44,20 @@ export const AddonsList: FC = () => {
 
   const client = supabaseAdmin ?? supabase;
 
+  // Filter and sort state
+  const {
+    filters,
+    setFilter,
+    resetFilters,
+    hasActiveFilters,
+    sort,
+    toggleSort,
+    getSortDirection,
+  } = useListFilters<AddonFilters, AddonSortField>({
+    defaultFilters: DEFAULT_ADDON_FILTERS,
+    defaultSort: { field: 'name', order: 'asc' },
+  });
+
   const { tableQuery } = useTable<DbAddon>({
     resource: 'addons',
     pagination: {
@@ -47,6 +73,60 @@ export const AddonsList: FC = () => {
     [tableQuery.data?.data]
   );
   const isLoading = tableQuery.isLoading;
+
+  // Client-side filtering and sorting
+  const filteredAndSortedAddons = useMemo(() => {
+    let result = [...addons];
+
+    // Filter by category
+    if (filters.category) {
+      result = result.filter((a) => a.category === filters.category);
+    }
+
+    // Filter by active status
+    if (filters.isActive === 'active') {
+      result = result.filter((a) => a.isActive);
+    } else if (filters.isActive === 'inactive') {
+      result = result.filter((a) => !a.isActive);
+    }
+
+    // Filter by stock
+    if (filters.inStock === 'instock') {
+      result = result.filter(
+        (a) => !a.hasInventory || (a.stockQuantity !== null && a.stockQuantity > 0)
+      );
+    } else if (filters.inStock === 'outofstock') {
+      result = result.filter(
+        (a) => a.hasInventory && (a.stockQuantity === null || a.stockQuantity === 0)
+      );
+    }
+
+    // Sort
+    if (sort) {
+      result.sort((a, b) => {
+        let comparison = 0;
+        switch (sort.field) {
+          case 'name':
+            comparison = a.name.localeCompare(b.name);
+            break;
+          case 'price':
+            comparison = a.price - b.price;
+            break;
+          case 'stock':
+            const stockA = a.hasInventory ? (a.stockQuantity ?? 0) : Infinity;
+            const stockB = b.hasInventory ? (b.stockQuantity ?? 0) : Infinity;
+            comparison = stockA - stockB;
+            break;
+          case 'sold':
+            comparison = (soldCounts.get(a.id) || 0) - (soldCounts.get(b.id) || 0);
+            break;
+        }
+        return sort.order === 'desc' ? -comparison : comparison;
+      });
+    }
+
+    return result;
+  }, [addons, filters.category, filters.isActive, filters.inStock, sort, soldCounts]);
 
   // Fetch sold counts for all addons
   useEffect(() => {
@@ -238,53 +318,89 @@ export const AddonsList: FC = () => {
         </div>
       </div>
 
+      {/* Filters */}
+      <FilterBar
+        hasActiveFilters={hasActiveFilters}
+        onReset={resetFilters}
+        title="Filters"
+      >
+        <FilterSelect
+          label="Category"
+          value={filters.category}
+          onChange={(value) => setFilter('category', value as AddonFilters['category'])}
+          options={ADDON_CATEGORY_OPTIONS}
+        />
+        <FilterSelect
+          label="Status"
+          value={filters.isActive}
+          onChange={(value) => setFilter('isActive', value as AddonFilters['isActive'])}
+          options={ACTIVE_STATUS_OPTIONS}
+        />
+        <FilterSelect
+          label="Stock"
+          value={filters.inStock}
+          onChange={(value) => setFilter('inStock', value as AddonFilters['inStock'])}
+          options={IN_STOCK_OPTIONS}
+        />
+      </FilterBar>
+
       {/* Add-ons Table */}
       <Card>
         <CardHeader>
-          <CardTitle>All Add-On Products</CardTitle>
+          <CardTitle>Add-On Products ({filteredAndSortedAddons.length})</CardTitle>
         </CardHeader>
         <CardContent>
           {isLoading ? (
             <div className="text-center py-8 text-white">
               Loading add-ons...
             </div>
-          ) : addons.length === 0 ? (
+          ) : filteredAndSortedAddons.length === 0 ? (
             <div className="text-center py-8 text-white">
-              No add-ons found. Create your first product to get started.
+              {hasActiveFilters
+                ? 'No add-ons match your filters. Try adjusting or resetting filters.'
+                : 'No add-ons found. Create your first product to get started.'}
             </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-white/20">
-                    <th className="text-left py-3 px-4 font-semibold text-white">
+                    <SortableTableHeader
+                      field="name"
+                      sortDirection={getSortDirection('name')}
+                      onSort={() => toggleSort('name')}
+                    >
                       Name
-                    </th>
-                    <th className="text-left py-3 px-4 font-semibold text-white">
-                      Category
-                    </th>
-                    <th className="text-left py-3 px-4 font-semibold text-white">
+                    </SortableTableHeader>
+                    <TableHeader>Category</TableHeader>
+                    <SortableTableHeader
+                      field="price"
+                      sortDirection={getSortDirection('price')}
+                      onSort={() => toggleSort('price')}
+                    >
                       Price
-                    </th>
-                    <th className="text-left py-3 px-4 font-semibold text-white">
+                    </SortableTableHeader>
+                    <SortableTableHeader
+                      field="stock"
+                      sortDirection={getSortDirection('stock')}
+                      onSort={() => toggleSort('stock')}
+                    >
                       Stock
-                    </th>
-                    <th className="text-left py-3 px-4 font-semibold text-white">
+                    </SortableTableHeader>
+                    <SortableTableHeader
+                      field="sold"
+                      sortDirection={getSortDirection('sold')}
+                      onSort={() => toggleSort('sold')}
+                    >
                       Sold
-                    </th>
-                    <th className="text-left py-3 px-4 font-semibold text-white">
-                      Stripe
-                    </th>
-                    <th className="text-left py-3 px-4 font-semibold text-white">
-                      Status
-                    </th>
-                    <th className="text-right py-3 px-4 font-semibold text-white">
-                      Actions
-                    </th>
+                    </SortableTableHeader>
+                    <TableHeader>Stripe</TableHeader>
+                    <TableHeader>Status</TableHeader>
+                    <TableHeader align="right">Actions</TableHeader>
                   </tr>
                 </thead>
                 <tbody>
-                  {addons.map((addon) => (
+                  {filteredAndSortedAddons.map((addon) => (
                     <tr
                       key={addon.id}
                       className="border-b border-white/10 hover:bg-white/5 transition-colors"
