@@ -92,6 +92,8 @@ export const WaitlistList: FC = () => {
     createWaitlistEntry,
     updateWaitlistEntry,
     deleteWaitlistEntry,
+    confirmWaitlistEntry,
+    confirmWaitlistEntries,
     promoteWaitlistUser,
     calculateInvoices,
     sendInvoices,
@@ -364,6 +366,39 @@ export const WaitlistList: FC = () => {
       await fetchData();
     } catch (err) {
       console.error('Error removing waitlist entry:', err);
+    }
+  };
+
+  // Handle confirming a single duplicate entry
+  const handleConfirmEntry = async (entryId: string) => {
+    try {
+      await confirmWaitlistEntry(entryId);
+      // Refresh verification results
+      const tournamentId = filters.tournamentId === 'all' ? undefined : filters.tournamentId;
+      const result = await verifyWaitlistRegistrations(tournamentId);
+      setVerificationResult(result);
+      // Also refresh the main list
+      await fetchData();
+    } catch (err) {
+      console.error('Error confirming waitlist entry:', err);
+    }
+  };
+
+  // Handle confirming all duplicate entries
+  const handleConfirmAll = async () => {
+    if (!verificationResult || verificationResult.duplicates.length === 0) return;
+
+    try {
+      const entryIds = verificationResult.duplicates.map((d) => d.waitlistEntryId);
+      await confirmWaitlistEntries(entryIds);
+      // Refresh verification results
+      const tournamentId = filters.tournamentId === 'all' ? undefined : filters.tournamentId;
+      const result = await verifyWaitlistRegistrations(tournamentId);
+      setVerificationResult(result);
+      // Also refresh the main list
+      await fetchData();
+    } catch (err) {
+      console.error('Error confirming all waitlist entries:', err);
     }
   };
 
@@ -778,6 +813,8 @@ export const WaitlistList: FC = () => {
         isLoading={isVerifying}
         error={verificationError}
         onRemoveFromWaitlist={handleRemoveFromWaitlist}
+        onConfirmEntry={handleConfirmEntry}
+        onConfirmAll={handleConfirmAll}
       />
     </div>
   );

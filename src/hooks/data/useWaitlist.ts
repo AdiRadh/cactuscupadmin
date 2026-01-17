@@ -189,6 +189,17 @@ export interface UseWaitlistReturn {
   deleteWaitlistEntry: (id: string) => Promise<void>;
 
   /**
+   * Confirm a waitlist entry (sets status to 'confirmed' and confirmed_at timestamp)
+   * Used for duplicates where user already has a tournament registration
+   */
+  confirmWaitlistEntry: (id: string) => Promise<void>;
+
+  /**
+   * Confirm multiple waitlist entries at once
+   */
+  confirmWaitlistEntries: (ids: string[]) => Promise<{ succeeded: string[]; failed: string[] }>;
+
+  /**
    * Get waitlist count per tournament
    */
   getWaitlistCounts: () => Promise<{ tournamentId: string; tournamentName: string; count: number }[]>;
@@ -384,6 +395,46 @@ export function useWaitlist(): UseWaitlistReturn {
       }
     },
     [client]
+  );
+
+  const confirmWaitlistEntry = useCallback(
+    async (id: string): Promise<void> => {
+      const now = new Date().toISOString();
+      const { error } = await client
+        .from('tournament_waitlist')
+        .update({
+          status: 'confirmed',
+          confirmed_at: now,
+          updated_at: now,
+        })
+        .eq('id', id);
+
+      if (error) {
+        console.error('Error confirming waitlist entry:', error);
+        throw error;
+      }
+    },
+    [client]
+  );
+
+  const confirmWaitlistEntries = useCallback(
+    async (ids: string[]): Promise<{ succeeded: string[]; failed: string[] }> => {
+      const succeeded: string[] = [];
+      const failed: string[] = [];
+
+      for (const id of ids) {
+        try {
+          await confirmWaitlistEntry(id);
+          succeeded.push(id);
+        } catch (err) {
+          console.error(`Error confirming waitlist entry ${id}:`, err);
+          failed.push(id);
+        }
+      }
+
+      return { succeeded, failed };
+    },
+    [confirmWaitlistEntry]
   );
 
   const getWaitlistCounts = useCallback(async (): Promise<
@@ -1093,6 +1144,8 @@ export function useWaitlist(): UseWaitlistReturn {
     createWaitlistEntry,
     updateWaitlistEntry,
     deleteWaitlistEntry,
+    confirmWaitlistEntry,
+    confirmWaitlistEntries,
     getWaitlistCounts,
     getRegisteredUsers,
     promoteWaitlistUser,

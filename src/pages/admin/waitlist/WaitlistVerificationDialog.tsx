@@ -19,6 +19,8 @@ import {
   Calendar,
   Trophy,
   Trash2,
+  Check,
+  CheckCheck,
 } from 'lucide-react';
 import type { WaitlistDuplicateEntry, WaitlistVerificationResult } from '@/hooks/data/useWaitlist';
 import type { WaitlistStatus } from '@/types';
@@ -30,6 +32,8 @@ interface WaitlistVerificationDialogProps {
   isLoading: boolean;
   error: string | null;
   onRemoveFromWaitlist?: (entryId: string) => Promise<void>;
+  onConfirmEntry?: (entryId: string) => Promise<void>;
+  onConfirmAll?: () => Promise<void>;
 }
 
 export const WaitlistVerificationDialog: FC<WaitlistVerificationDialogProps> = ({
@@ -39,8 +43,12 @@ export const WaitlistVerificationDialog: FC<WaitlistVerificationDialogProps> = (
   isLoading,
   error,
   onRemoveFromWaitlist,
+  onConfirmEntry,
+  onConfirmAll,
 }) => {
   const [removingEntryId, setRemovingEntryId] = useState<string | null>(null);
+  const [confirmingEntryId, setConfirmingEntryId] = useState<string | null>(null);
+  const [isConfirmingAll, setIsConfirmingAll] = useState(false);
 
   const formatDate = (dateString: string | null) => {
     if (!dateString) return 'N/A';
@@ -90,6 +98,26 @@ export const WaitlistVerificationDialog: FC<WaitlistVerificationDialogProps> = (
       await onRemoveFromWaitlist(entryId);
     } finally {
       setRemovingEntryId(null);
+    }
+  };
+
+  const handleConfirm = async (entryId: string) => {
+    if (!onConfirmEntry) return;
+    setConfirmingEntryId(entryId);
+    try {
+      await onConfirmEntry(entryId);
+    } finally {
+      setConfirmingEntryId(null);
+    }
+  };
+
+  const handleConfirmAll = async () => {
+    if (!onConfirmAll) return;
+    setIsConfirmingAll(true);
+    try {
+      await onConfirmAll();
+    } finally {
+      setIsConfirmingAll(false);
     }
   };
 
@@ -149,6 +177,29 @@ export const WaitlistVerificationDialog: FC<WaitlistVerificationDialogProps> = (
               </Card>
             </div>
 
+            {/* Confirm All Button */}
+            {verificationResult.duplicateCount > 0 && onConfirmAll && (
+              <div className="flex justify-end">
+                <Button
+                  onClick={handleConfirmAll}
+                  disabled={isConfirmingAll}
+                  className="bg-green-600 hover:bg-green-700 text-white"
+                >
+                  {isConfirmingAll ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Confirming All...
+                    </>
+                  ) : (
+                    <>
+                      <CheckCheck className="h-4 w-4 mr-2" />
+                      Confirm All ({verificationResult.duplicateCount})
+                    </>
+                  )}
+                </Button>
+              </div>
+            )}
+
             {/* Results */}
             {verificationResult.duplicateCount === 0 ? (
               <div className="text-center py-8">
@@ -174,6 +225,8 @@ export const WaitlistVerificationDialog: FC<WaitlistVerificationDialogProps> = (
                     getWaitlistStatusBadge={getWaitlistStatusBadge}
                     onRemove={onRemoveFromWaitlist ? handleRemove : undefined}
                     isRemoving={removingEntryId === duplicate.waitlistEntryId}
+                    onConfirm={onConfirmEntry ? handleConfirm : undefined}
+                    isConfirming={confirmingEntryId === duplicate.waitlistEntryId}
                   />
                 ))}
               </div>
@@ -192,6 +245,8 @@ interface DuplicateCardProps {
   getWaitlistStatusBadge: (status: WaitlistStatus) => JSX.Element;
   onRemove?: (entryId: string) => void;
   isRemoving: boolean;
+  onConfirm?: (entryId: string) => void;
+  isConfirming: boolean;
 }
 
 const DuplicateCard: FC<DuplicateCardProps> = ({
@@ -201,6 +256,8 @@ const DuplicateCard: FC<DuplicateCardProps> = ({
   getWaitlistStatusBadge,
   onRemove,
   isRemoving,
+  onConfirm,
+  isConfirming,
 }) => {
   return (
     <Card className="bg-slate-800 border-yellow-500/30">
@@ -266,23 +323,41 @@ const DuplicateCard: FC<DuplicateCardProps> = ({
             </div>
           </div>
 
-          {/* Action Button */}
-          {onRemove && (
-            <div className="ml-4">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => onRemove(duplicate.waitlistEntryId)}
-                disabled={isRemoving}
-                className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
-                title="Remove from waitlist"
-              >
-                {isRemoving ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Trash2 className="h-4 w-4" />
-                )}
-              </Button>
+          {/* Action Buttons */}
+          {(onConfirm || onRemove) && (
+            <div className="ml-4 flex flex-col gap-2">
+              {onConfirm && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => onConfirm(duplicate.waitlistEntryId)}
+                  disabled={isConfirming || isRemoving}
+                  className="text-green-400 hover:text-green-300 hover:bg-green-500/10"
+                  title="Confirm waitlist entry"
+                >
+                  {isConfirming ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Check className="h-4 w-4" />
+                  )}
+                </Button>
+              )}
+              {onRemove && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => onRemove(duplicate.waitlistEntryId)}
+                  disabled={isRemoving || isConfirming}
+                  className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                  title="Remove from waitlist"
+                >
+                  {isRemoving ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Trash2 className="h-4 w-4" />
+                  )}
+                </Button>
+              )}
             </div>
           )}
         </div>
