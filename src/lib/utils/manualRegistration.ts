@@ -6,23 +6,26 @@ export interface AddManualTournamentEntryParams {
   amountPaid?: number; // in cents, default 0
   adminNotes?: string;
   createOrder?: boolean; // whether to create order record for audit trail
+  eventYear?: number; // defaults to current year
 }
 
 export interface ManualEntryResult {
   success: boolean;
   registrationId?: string;
   orderId?: string;
+  eventRegistrationId?: string;
+  eventRegistrationCreated?: boolean;
   error?: string;
 }
 
 /**
  * Add a manual tournament entry for a user (admin bypass of payment)
- * Creates tournament registration and optionally an order for audit trail
+ * Creates tournament registration, event registration (if needed), and optionally an order for audit trail
  */
 export async function addManualTournamentEntry(
   params: AddManualTournamentEntryParams
 ): Promise<ManualEntryResult> {
-  const { userId, tournamentId, amountPaid = 0, adminNotes, createOrder = true } = params;
+  const { userId, tournamentId, amountPaid = 0, adminNotes, createOrder = true, eventYear = new Date().getFullYear() } = params;
   const client = supabaseAdmin ?? supabase;
 
   try {
@@ -94,7 +97,45 @@ export async function addManualTournamentEntry(
       // Don't fail the whole operation, just log
     }
 
-    // 5. Optionally create order for audit trail
+    // 5. Check if user has an event registration for this year, create one if not
+    let eventRegistrationId: string | undefined;
+    let eventRegistrationCreated = false;
+
+    const { data: existingEventReg } = await client
+      .from('event_registrations')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('event_year', eventYear)
+      .maybeSingle();
+
+    if (!existingEventReg) {
+      // Create event registration for the user
+      const eventRegData = {
+        user_id: userId,
+        event_year: eventYear,
+        registration_fee: 0, // Manual entries are typically comped
+        payment_status: 'completed',
+        registered_at: new Date().toISOString(),
+      };
+
+      const { data: newEventReg, error: eventRegError } = await client
+        .from('event_registrations')
+        .insert(eventRegData)
+        .select('id')
+        .single();
+
+      if (eventRegError) {
+        console.error('Error creating event registration:', eventRegError);
+        // Don't fail the whole operation, just log
+      } else if (newEventReg) {
+        eventRegistrationId = newEventReg.id;
+        eventRegistrationCreated = true;
+      }
+    } else {
+      eventRegistrationId = existingEventReg.id;
+    }
+
+    // 6. Optionally create order for audit trail
     let orderId: string | undefined;
     if (createOrder) {
       // Generate order number
@@ -164,6 +205,8 @@ export async function addManualTournamentEntry(
       success: true,
       registrationId: registration.id,
       orderId,
+      eventRegistrationId,
+      eventRegistrationCreated,
     };
   } catch (err) {
     console.error('Manual tournament entry failed:', err);

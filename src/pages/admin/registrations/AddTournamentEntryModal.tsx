@@ -166,12 +166,15 @@ export const AddTournamentEntryModal: FC<AddTournamentEntryModalProps> = ({
       });
 
       if (result.success) {
-        setSuccessMessage('Tournament entry added successfully!');
+        const message = result.eventRegistrationCreated
+          ? 'Tournament entry added and event registration created!'
+          : 'Tournament entry added successfully!';
+        setSuccessMessage(message);
         // Call onSuccess callback after short delay
         setTimeout(() => {
           onSuccess?.();
           onOpenChange(false);
-        }, 1000);
+        }, 1500);
       } else {
         setError(result.error || 'Failed to add tournament entry');
       }
