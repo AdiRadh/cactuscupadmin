@@ -17,6 +17,7 @@ import { Badge } from '@/components/ui';
 import { Loader2, Search, UserPlus, Swords } from 'lucide-react';
 import {
   addManualTournamentEntry,
+  addManualEventRegistration,
   searchUsers,
   getAvailableTournaments,
   type UserSearchResult,
@@ -144,11 +145,6 @@ export const AddTournamentEntryModal: FC<AddTournamentEntryModalProps> = ({
       return;
     }
 
-    if (!selectedTournamentId) {
-      setError('Please select a tournament');
-      return;
-    }
-
     setIsSubmitting(true);
     setError(null);
     setSuccessMessage(null);
@@ -157,29 +153,49 @@ export const AddTournamentEntryModal: FC<AddTournamentEntryModalProps> = ({
       // Convert dollars to cents
       const amountInCents = Math.round(parseFloat(amountPaid || '0') * 100);
 
-      const result = await addManualTournamentEntry({
-        userId: selectedUser.id,
-        tournamentId: selectedTournamentId,
-        amountPaid: amountInCents,
-        adminNotes: adminNotes || undefined,
-        createOrder,
-      });
+      if (selectedTournamentId) {
+        // Create tournament entry (which also creates event registration if needed)
+        const result = await addManualTournamentEntry({
+          userId: selectedUser.id,
+          tournamentId: selectedTournamentId,
+          amountPaid: amountInCents,
+          adminNotes: adminNotes || undefined,
+          createOrder,
+        });
 
-      if (result.success) {
-        const message = result.eventRegistrationCreated
-          ? 'Tournament entry added and event registration created!'
-          : 'Tournament entry added successfully!';
-        setSuccessMessage(message);
-        // Call onSuccess callback after short delay
-        setTimeout(() => {
-          onSuccess?.();
-          onOpenChange(false);
-        }, 1500);
+        if (result.success) {
+          const message = result.eventRegistrationCreated
+            ? 'Tournament entry added and event registration created!'
+            : 'Tournament entry added successfully!';
+          setSuccessMessage(message);
+          setTimeout(() => {
+            onSuccess?.();
+            onOpenChange(false);
+          }, 1500);
+        } else {
+          setError(result.error || 'Failed to add tournament entry');
+        }
       } else {
-        setError(result.error || 'Failed to add tournament entry');
+        // Create event registration only (no tournament)
+        const result = await addManualEventRegistration({
+          userId: selectedUser.id,
+          registrationFee: amountInCents,
+          adminNotes: adminNotes || undefined,
+          createOrder,
+        });
+
+        if (result.success) {
+          setSuccessMessage('Event registration created successfully!');
+          setTimeout(() => {
+            onSuccess?.();
+            onOpenChange(false);
+          }, 1500);
+        } else {
+          setError(result.error || 'Failed to create event registration');
+        }
       }
     } catch (err) {
-      console.error('Error adding tournament entry:', err);
+      console.error('Error adding entry:', err);
       setError(err instanceof Error ? err.message : 'Unknown error');
     } finally {
       setIsSubmitting(false);
@@ -202,10 +218,10 @@ export const AddTournamentEntryModal: FC<AddTournamentEntryModalProps> = ({
         <DialogHeader>
           <DialogTitle className="text-white flex items-center gap-2">
             <UserPlus className="h-5 w-5" />
-            Add Tournament Entry
+            Add Manual Entry
           </DialogTitle>
           <DialogDescription className="text-slate-400">
-            Manually add a tournament entry for a user (bypasses payment)
+            Manually add an event or tournament registration for a user (bypasses payment)
           </DialogDescription>
         </DialogHeader>
 
@@ -262,7 +278,8 @@ export const AddTournamentEntryModal: FC<AddTournamentEntryModalProps> = ({
 
           {/* Tournament Selection */}
           <div className="space-y-2">
-            <Label className="text-white">Tournament *</Label>
+            <Label className="text-white">Tournament (Optional)</Label>
+            <p className="text-xs text-slate-400">Leave empty to create event registration only</p>
             {isLoadingTournaments ? (
               <div className="flex items-center gap-2 text-slate-400">
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -274,7 +291,7 @@ export const AddTournamentEntryModal: FC<AddTournamentEntryModalProps> = ({
                 onChange={(e) => setSelectedTournamentId(e.target.value)}
                 className="w-full h-10 rounded-md border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
               >
-                <option value="">Select a tournament...</option>
+                <option value="">Event registration only (no tournament)</option>
                 {tournaments.map((tournament) => {
                   const isFull = Boolean(tournament.maxParticipants && tournament.currentParticipants >= tournament.maxParticipants);
                   return (
@@ -364,7 +381,7 @@ export const AddTournamentEntryModal: FC<AddTournamentEntryModalProps> = ({
           </Button>
           <Button
             onClick={handleSubmit}
-            disabled={isSubmitting || !selectedUser || !selectedTournamentId}
+            disabled={isSubmitting || !selectedUser}
             className="bg-orange-600 hover:bg-orange-700 text-white"
           >
             {isSubmitting ? (
@@ -372,8 +389,10 @@ export const AddTournamentEntryModal: FC<AddTournamentEntryModalProps> = ({
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                 Adding...
               </>
+            ) : selectedTournamentId ? (
+              'Add Tournament Entry'
             ) : (
-              'Add Entry'
+              'Add Event Registration'
             )}
           </Button>
         </DialogFooter>

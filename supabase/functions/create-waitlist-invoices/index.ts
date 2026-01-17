@@ -328,6 +328,9 @@ serve(async (req) => {
           customer: stripeCustomerId,
           collection_method: 'send_invoice',
           days_until_due: 7,
+          rendering: {
+            template: 'inrtem_1SqLLY6yLGtdSunKkhwccdH1',
+          },
           metadata: {
             waitlist_entry_id: entryId,
             tournament_id: tournament.id,

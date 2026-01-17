@@ -9,6 +9,21 @@ export interface AddManualTournamentEntryParams {
   eventYear?: number; // defaults to current year
 }
 
+export interface AddManualEventRegistrationParams {
+  userId: string;
+  registrationFee?: number; // in cents, default 0
+  adminNotes?: string;
+  createOrder?: boolean; // whether to create order record for audit trail
+  eventYear?: number; // defaults to current year
+}
+
+export interface ManualEventRegistrationResult {
+  success: boolean;
+  eventRegistrationId?: string;
+  orderId?: string;
+  error?: string;
+}
+
 export interface ManualEntryResult {
   success: boolean;
   registrationId?: string;
@@ -210,6 +225,122 @@ export async function addManualTournamentEntry(
     };
   } catch (err) {
     console.error('Manual tournament entry failed:', err);
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Unknown error',
+    };
+  }
+}
+
+/**
+ * Add a manual event registration for a user (admin bypass of payment)
+ * Creates event registration without requiring a tournament registration
+ */
+export async function addManualEventRegistration(
+  params: AddManualEventRegistrationParams
+): Promise<ManualEventRegistrationResult> {
+  const { userId, registrationFee = 0, adminNotes, createOrder = true, eventYear = new Date().getFullYear() } = params;
+  const client = supabaseAdmin ?? supabase;
+
+  try {
+    // 1. Check if user already has an event registration for this year
+    const { data: existingEventReg, error: existingError } = await client
+      .from('event_registrations')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('event_year', eventYear)
+      .maybeSingle();
+
+    if (existingError) {
+      console.error('Error checking existing event registration:', existingError);
+    }
+
+    if (existingEventReg) {
+      return { success: false, error: 'User already has an event registration for this year' };
+    }
+
+    // 2. Create event registration
+    const eventRegData = {
+      user_id: userId,
+      event_year: eventYear,
+      registration_fee: registrationFee,
+      payment_status: 'completed',
+      registered_at: new Date().toISOString(),
+    };
+
+    const { data: eventRegistration, error: eventRegError } = await client
+      .from('event_registrations')
+      .insert(eventRegData)
+      .select('id')
+      .single();
+
+    if (eventRegError || !eventRegistration) {
+      console.error('Error creating event registration:', eventRegError);
+      return { success: false, error: eventRegError?.message || 'Failed to create event registration' };
+    }
+
+    // 3. Optionally create order for audit trail
+    let orderId: string | undefined;
+    if (createOrder) {
+      const orderNumber = `MANUAL-EVENT-${Date.now()}`;
+
+      const orderData = {
+        user_id: userId,
+        order_number: orderNumber,
+        subtotal: registrationFee,
+        tax: 0,
+        total: registrationFee,
+        payment_status: 'completed',
+        order_status: 'completed',
+        fulfillment_status: 'delivered',
+        admin_notes: adminNotes || 'Manual event registration by admin',
+        paid_at: new Date().toISOString(),
+      };
+
+      const { data: order, error: orderError } = await client
+        .from('orders')
+        .insert(orderData)
+        .select('id')
+        .single();
+
+      if (orderError) {
+        console.error('Error creating order:', orderError);
+        // Don't fail the whole operation, just log
+      } else if (order) {
+        orderId = order.id;
+
+        // Create order item linking to the event registration
+        const orderItemData = {
+          order_id: order.id,
+          item_type: 'event_registration',
+          event_registration_id: eventRegistration.id,
+          item_name: 'Event Registration',
+          item_description: adminNotes || 'Manual event registration by admin',
+          unit_price: registrationFee,
+          quantity: 1,
+          subtotal: registrationFee,
+          tax: 0,
+          total: registrationFee,
+          discount_amount: 0,
+        };
+
+        const { error: orderItemError } = await client
+          .from('order_items')
+          .insert(orderItemData);
+
+        if (orderItemError) {
+          console.error('Error creating order item:', orderItemError);
+        }
+      }
+    }
+
+    return {
+      success: true,
+      eventRegistrationId: eventRegistration.id,
+      orderId,
+    };
+  } catch (err) {
+    console.error('Manual event registration failed:', err);
     return {
       success: false,
       error: err instanceof Error ? err.message : 'Unknown error',
