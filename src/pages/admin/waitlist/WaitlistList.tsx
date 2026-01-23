@@ -40,6 +40,7 @@ import { WaitlistEditModal } from './WaitlistEditModal';
 import { WaitlistCreateModal } from './WaitlistCreateModal';
 import { SendInvoicesDialog } from './SendInvoicesDialog';
 import { WaitlistVerificationDialog } from './WaitlistVerificationDialog';
+import { BulkStatusUpdateDialog } from './BulkStatusUpdateDialog';
 
 export const WaitlistList: FC = () => {
   const [entries, setEntries] = useState<WaitlistEntry[]>([]);
@@ -81,6 +82,10 @@ export const WaitlistList: FC = () => {
   // Invoice selection state
   const [selectedEntries, setSelectedEntries] = useState<Set<string>>(new Set());
   const [isInvoiceDialogOpen, setIsInvoiceDialogOpen] = useState(false);
+  const [isBulkStatusDialogOpen, setIsBulkStatusDialogOpen] = useState(false);
+
+  // Filter change confirmation state (when selections exist)
+  const [pendingFilterAction, setPendingFilterAction] = useState<(() => void) | null>(null);
 
   // Verification dialog state
   const [isVerificationDialogOpen, setIsVerificationDialogOpen] = useState(false);
@@ -99,6 +104,7 @@ export const WaitlistList: FC = () => {
     deleteWaitlistEntry,
     confirmWaitlistEntry,
     confirmWaitlistEntries,
+    bulkUpdateWaitlistStatus,
     promoteWaitlistUser,
     calculateInvoices,
     sendInvoices,
@@ -206,11 +212,6 @@ export const WaitlistList: FC = () => {
     return { total, waiting, promoted, invoiced, confirmed, cancelled, expired };
   }, [entries]);
 
-  // Entries that can be invoiced (promoted status) - from filtered list
-  const invoiceableEntries = useMemo(() => {
-    return filteredAndSortedEntries.filter((e) => e.status === 'promoted');
-  }, [filteredAndSortedEntries]);
-
   // Handle selection toggle
   const handleToggleSelection = (entryId: string) => {
     setSelectedEntries((prev) => {
@@ -224,15 +225,85 @@ export const WaitlistList: FC = () => {
     });
   };
 
-  // Handle select all promoted entries
-  const handleSelectAllPromoted = () => {
-    if (selectedEntries.size === invoiceableEntries.length && invoiceableEntries.length > 0) {
-      // Deselect all
-      setSelectedEntries(new Set());
+  // Check if all filtered entries are selected
+  const allFilteredSelected = useMemo(() => {
+    if (filteredAndSortedEntries.length === 0) return false;
+    return filteredAndSortedEntries.every((e) => selectedEntries.has(e.id));
+  }, [filteredAndSortedEntries, selectedEntries]);
+
+  // Handle select all filtered entries
+  const handleSelectAll = () => {
+    if (allFilteredSelected) {
+      // Deselect all filtered entries (keep selections from other filters)
+      const filteredIds = new Set(filteredAndSortedEntries.map((e) => e.id));
+      setSelectedEntries((prev) => {
+        const next = new Set(prev);
+        for (const id of filteredIds) {
+          next.delete(id);
+        }
+        return next;
+      });
     } else {
-      // Select all promoted entries
-      setSelectedEntries(new Set(invoiceableEntries.map((e) => e.id)));
+      // Select all filtered entries (add to existing selections)
+      setSelectedEntries((prev) => {
+        const next = new Set(prev);
+        for (const entry of filteredAndSortedEntries) {
+          next.add(entry.id);
+        }
+        return next;
+      });
     }
+  };
+
+  // Handle bulk status update success
+  const handleBulkStatusSuccess = async () => {
+    setSelectedEntries(new Set());
+    await fetchData();
+  };
+
+  // Wrapper for filter changes - confirms with user if selections exist
+  const handleFilterChange = useCallback((action: () => void) => {
+    if (selectedEntries.size > 0) {
+      setPendingFilterAction(() => action);
+    } else {
+      action();
+    }
+  }, [selectedEntries.size]);
+
+  // Confirm filter change and clear selections
+  const confirmFilterChange = () => {
+    if (pendingFilterAction) {
+      setSelectedEntries(new Set());
+      pendingFilterAction();
+      setPendingFilterAction(null);
+    }
+  };
+
+  // Cancel filter change
+  const cancelFilterChange = () => {
+    setPendingFilterAction(null);
+  };
+
+  // Auto-execute pending filter action if selections are cleared while dialog would be open
+  useEffect(() => {
+    if (pendingFilterAction && selectedEntries.size === 0) {
+      pendingFilterAction();
+      setPendingFilterAction(null);
+    }
+  }, [pendingFilterAction, selectedEntries.size]);
+
+  // Handle reset filters with confirmation
+  const handleResetFilters = () => {
+    handleFilterChange(() => resetFilters());
+  };
+
+  // Handle search input - clears selections silently (no confirmation dialog)
+  // This avoids showing a dialog on every keystroke
+  const handleSearchChange = (value: string) => {
+    if (selectedEntries.size > 0) {
+      setSelectedEntries(new Set());
+    }
+    setFilter('search', value);
   };
 
   // Handle invoice send success
@@ -501,14 +572,24 @@ export const WaitlistList: FC = () => {
         </div>
         <div className="flex items-center gap-2">
           {selectedEntries.size > 0 && (
-            <Button
-              size="sm"
-              onClick={() => setIsInvoiceDialogOpen(true)}
-              className="bg-blue-500 hover:bg-blue-600 text-white"
-            >
-              <Send className="h-4 w-4 mr-2" />
-              Send Invoices ({selectedEntries.size})
-            </Button>
+            <>
+              <Button
+                size="sm"
+                onClick={() => setIsBulkStatusDialogOpen(true)}
+                className="bg-orange-500 hover:bg-orange-600 text-white"
+              >
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Update Status ({selectedEntries.size})
+              </Button>
+              <Button
+                size="sm"
+                onClick={() => setIsInvoiceDialogOpen(true)}
+                className="bg-blue-500 hover:bg-blue-600 text-white"
+              >
+                <Send className="h-4 w-4 mr-2" />
+                Send Invoices ({selectedEntries.size})
+              </Button>
+            </>
           )}
           <Button
             variant="outline"
@@ -554,24 +635,24 @@ export const WaitlistList: FC = () => {
       {/* Filters */}
       <FilterBar
         hasActiveFilters={hasActiveFilters}
-        onReset={resetFilters}
+        onReset={handleResetFilters}
         title="Filters"
       >
         <FilterSelect
           label="Tournament"
           value={filters.tournamentId}
-          onChange={(value) => setFilter('tournamentId', value)}
+          onChange={(value) => handleFilterChange(() => setFilter('tournamentId', value))}
           options={tournamentOptions}
         />
         <FilterSelect
           label="Status"
           value={filters.status}
-          onChange={(value) => setFilter('status', value as WaitlistFilters['status'])}
+          onChange={(value) => handleFilterChange(() => setFilter('status', value as WaitlistFilters['status']))}
           options={WAITLIST_STATUS_OPTIONS}
         />
         <SearchInput
           value={filters.search}
-          onChange={(value) => setFilter('search', value)}
+          onChange={handleSearchChange}
           placeholder="Search name or email..."
           className="w-64"
         />
@@ -579,8 +660,8 @@ export const WaitlistList: FC = () => {
           label="Joined Date"
           fromValue={filters.dateFrom}
           toValue={filters.dateTo}
-          onFromChange={(value) => setFilter('dateFrom', value)}
-          onToChange={(value) => setFilter('dateTo', value)}
+          onFromChange={(value) => handleFilterChange(() => setFilter('dateFrom', value))}
+          onToChange={(value) => handleFilterChange(() => setFilter('dateTo', value))}
         />
       </FilterBar>
 
@@ -681,14 +762,11 @@ export const WaitlistList: FC = () => {
                   <th className="w-10 py-3 px-4">
                     <input
                       type="checkbox"
-                      checked={
-                        invoiceableEntries.length > 0 &&
-                        selectedEntries.size === invoiceableEntries.length
-                      }
-                      onChange={handleSelectAllPromoted}
-                      disabled={invoiceableEntries.length === 0}
+                      checked={allFilteredSelected}
+                      onChange={handleSelectAll}
+                      disabled={filteredAndSortedEntries.length === 0}
                       className="rounded border-slate-600 bg-slate-700 text-orange-500 focus:ring-orange-500 disabled:opacity-50"
-                      title={invoiceableEntries.length === 0 ? 'No promoted entries to select' : 'Select all promoted entries'}
+                      title={filteredAndSortedEntries.length === 0 ? 'No entries to select' : 'Select all entries'}
                     />
                   </th>
                   <SortableTableHeader
@@ -728,7 +806,6 @@ export const WaitlistList: FC = () => {
               </thead>
               <tbody>
                 {filteredAndSortedEntries.map((entry) => {
-                  const isInvoiceable = entry.status === 'promoted';
                   const isSelected = selectedEntries.has(entry.id);
 
                   return (
@@ -743,9 +820,8 @@ export const WaitlistList: FC = () => {
                           type="checkbox"
                           checked={isSelected}
                           onChange={() => handleToggleSelection(entry.id)}
-                          disabled={!isInvoiceable}
-                          className="rounded border-slate-600 bg-slate-700 text-orange-500 focus:ring-orange-500 disabled:opacity-30"
-                          title={isInvoiceable ? 'Select for invoicing' : 'Only promoted entries can be invoiced'}
+                          className="rounded border-slate-600 bg-slate-700 text-orange-500 focus:ring-orange-500"
+                          title="Select for bulk actions"
                         />
                       </td>
                       <td className="py-3 px-4">
@@ -855,6 +931,29 @@ export const WaitlistList: FC = () => {
         onRemoveFromWaitlist={handleRemoveFromWaitlist}
         onConfirmEntry={handleConfirmEntry}
         onConfirmAll={handleConfirmAll}
+      />
+
+      {/* Bulk Status Update Dialog */}
+      <BulkStatusUpdateDialog
+        open={isBulkStatusDialogOpen}
+        onOpenChange={setIsBulkStatusDialogOpen}
+        selectedEntryIds={Array.from(selectedEntries)}
+        bulkUpdateWaitlistStatus={bulkUpdateWaitlistStatus}
+        onSuccess={handleBulkStatusSuccess}
+      />
+
+      {/* Filter Change Confirmation Dialog */}
+      <ConfirmDialog
+        open={pendingFilterAction !== null && selectedEntries.size > 0}
+        onOpenChange={(open) => {
+          if (!open) cancelFilterChange();
+        }}
+        onConfirm={confirmFilterChange}
+        title="Clear Selections?"
+        description={`You have ${selectedEntries.size} ${selectedEntries.size === 1 ? 'entry' : 'entries'} selected. Changing filters will clear your selections. Do you want to continue?`}
+        confirmText="Clear & Continue"
+        cancelText="Cancel"
+        variant="warning"
       />
 
       {/* Create Tournament Registration Confirmation Dialog */}

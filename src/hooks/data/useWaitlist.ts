@@ -173,11 +173,30 @@ export interface CreateRegistrationResult {
   error?: string;
 }
 
+/**
+ * Result of bulk status update
+ */
+export interface BulkUpdateResult {
+  succeeded: string[];
+  failed: { id: string; error: string }[];
+}
+
 export interface UseWaitlistReturn {
   /**
    * Fetch waitlist entries, optionally filtered by tournament
    */
   getWaitlistEntries: (tournamentId?: string) => Promise<WaitlistEntry[]>;
+
+  /**
+   * Bulk update status for multiple waitlist entries
+   * Processes entries one-by-one with progress callback
+   * Uses promoteWaitlistUser for 'promoted' status, updateWaitlistEntry for others
+   */
+  bulkUpdateWaitlistStatus: (
+    ids: string[],
+    targetStatus: WaitlistStatus,
+    onProgress?: (current: number, total: number) => void
+  ) => Promise<BulkUpdateResult>;
 
   /**
    * Create a new waitlist entry (admin can add anyone, even non-registered users)
@@ -602,6 +621,47 @@ export function useWaitlist(): UseWaitlistReturn {
       }
     },
     [client]
+  );
+
+  const bulkUpdateWaitlistStatus = useCallback(
+    async (
+      ids: string[],
+      targetStatus: WaitlistStatus,
+      onProgress?: (current: number, total: number) => void
+    ): Promise<BulkUpdateResult> => {
+      const succeeded: string[] = [];
+      const failed: { id: string; error: string }[] = [];
+
+      let index = 0;
+      for (const id of ids) {
+        index++;
+        onProgress?.(index, ids.length);
+
+        try {
+          if (targetStatus === 'promoted') {
+            // Use promotion flow for promoted status (handles capacity checks)
+            const result = await promoteWaitlistUser(id, true);
+            if (result.success) {
+              succeeded.push(id);
+            } else {
+              failed.push({ id, error: result.error || 'Promotion failed' });
+            }
+          } else {
+            // Use regular update for other statuses
+            await updateWaitlistEntry(id, { status: targetStatus });
+            succeeded.push(id);
+          }
+        } catch (err) {
+          failed.push({
+            id,
+            error: err instanceof Error ? err.message : 'Unknown error',
+          });
+        }
+      }
+
+      return { succeeded, failed };
+    },
+    [promoteWaitlistUser, updateWaitlistEntry]
   );
 
   const calculateInvoices = useCallback(
@@ -1302,6 +1362,7 @@ export function useWaitlist(): UseWaitlistReturn {
     deleteWaitlistEntry,
     confirmWaitlistEntry,
     confirmWaitlistEntries,
+    bulkUpdateWaitlistStatus,
     getWaitlistCounts,
     getRegisteredUsers,
     promoteWaitlistUser,
