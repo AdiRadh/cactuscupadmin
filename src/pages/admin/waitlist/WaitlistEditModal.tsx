@@ -190,12 +190,18 @@ export const WaitlistEditModal: FC<WaitlistEditModalProps> = ({
               >
                 <option value="waiting">Waiting</option>
                 <option value="promoted">Promoted</option>
+                <option value="invoiced">Invoiced</option>
+                <option value="confirmed">Confirmed</option>
                 <option value="cancelled">Cancelled</option>
+                <option value="expired">Expired</option>
               </select>
               <p className="text-xs text-slate-500">
-                {status === 'promoted' && 'User has been offered a spot and needs to complete registration'}
                 {status === 'waiting' && 'User is actively waiting for a spot'}
+                {status === 'promoted' && 'User has been offered a spot and needs to complete registration'}
+                {status === 'invoiced' && 'Invoice has been sent to the user'}
+                {status === 'confirmed' && 'User has confirmed their spot'}
                 {status === 'cancelled' && 'User has left the waitlist or been removed'}
+                {status === 'expired' && 'User\'s offer has expired'}
               </p>
             </div>
 

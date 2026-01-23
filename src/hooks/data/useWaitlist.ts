@@ -410,6 +410,10 @@ export function useWaitlist(): UseWaitlistReturn {
         if (data.status === 'promoted') {
           updateData.promoted_at = new Date().toISOString();
         }
+        // Set confirmed_at timestamp when status changes to confirmed
+        if (data.status === 'confirmed') {
+          updateData.confirmed_at = new Date().toISOString();
+        }
       }
 
       const { error } = await client
