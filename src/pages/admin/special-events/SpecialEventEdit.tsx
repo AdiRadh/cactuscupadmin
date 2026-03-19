@@ -89,6 +89,7 @@ export const SpecialEventEdit: FC = () => {
       is_active: formData.isActive,
       status: formData.status,
       visible: formData.visible,
+      linked_addon_id: formData.linkedAddonId || null,
     };
 
     setIsUpdating(true);

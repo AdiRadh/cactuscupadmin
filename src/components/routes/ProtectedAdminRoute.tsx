@@ -1,5 +1,5 @@
 import type { FC, ReactNode } from 'react';
-import { Navigate, useLocation } from 'react-router-dom';
+import { Navigate, useLocation, Link } from 'react-router-dom';
 import { useAuth, useUserRole, isPathAllowedForOrganizer } from '@/hooks';
 import { Card, CardContent } from '@/components/ui';
 
@@ -34,7 +34,7 @@ export const ProtectedAdminRoute: FC<ProtectedAdminRouteProps> = ({ children }) 
 
   // Redirect to login if not authenticated
   if (!user) {
-    return <Navigate to="/login" state={{ returnTo: window.location.pathname }} replace />;
+    return <Navigate to="/login" state={{ returnTo: location.pathname }} replace />;
   }
 
   // Check access based on role - map current path to check organizer access
@@ -77,19 +77,19 @@ export const ProtectedAdminRoute: FC<ProtectedAdminRouteProps> = ({ children }) 
               </p>
               <div className="flex flex-col gap-2">
                 {isOrganizerAccessingRestrictedArea && (
-                  <a
-                    href="/tournaments"
+                  <Link
+                    to="/tournaments"
                     className="inline-block px-6 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors font-medium"
                   >
                     Go to Tournaments
-                  </a>
+                  </Link>
                 )}
-                <a
-                  href="/login"
+                <Link
+                  to="/login"
                   className="inline-block px-6 py-2 bg-turquoise-600 text-white rounded-lg hover:bg-turquoise-700 transition-colors font-medium"
                 >
                   Sign In as Different User
-                </a>
+                </Link>
               </div>
             </div>
           </CardContent>

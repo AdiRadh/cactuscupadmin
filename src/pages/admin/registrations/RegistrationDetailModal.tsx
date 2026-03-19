@@ -29,6 +29,7 @@ import {
   removeEventRegistration,
 } from '@/lib/utils/stripe';
 import { AddTournamentEntryModal } from './AddTournamentEntryModal';
+import { AddAddonModal } from './AddAddonModal';
 
 interface TournamentPurchase {
   id: string;
@@ -107,6 +108,7 @@ export const RegistrationDetailModal: FC<RegistrationDetailModalProps> = ({
   const [isRemoving, setIsRemoving] = useState(false);
   const [removeError, setRemoveError] = useState<string | null>(null);
   const [isAddTournamentModalOpen, setIsAddTournamentModalOpen] = useState(false);
+  const [isAddAddonModalOpen, setIsAddAddonModalOpen] = useState(false);
 
   const client = supabaseAdmin ?? supabase;
 
@@ -497,9 +499,20 @@ export const RegistrationDetailModal: FC<RegistrationDetailModalProps> = ({
 
             {/* Add-ons Section */}
             <div>
-              <div className="flex items-center gap-2 mb-3">
-                <ShoppingBag className="h-5 w-5 text-slate-400 shrink-0" />
-                <h3 className="font-semibold text-white">Add-ons & Merchandise ({addons.length})</h3>
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-3">
+                <div className="flex items-center gap-2">
+                  <ShoppingBag className="h-5 w-5 text-slate-400 shrink-0" />
+                  <h3 className="font-semibold text-white">Add-ons & Merchandise ({addons.length})</h3>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setIsAddAddonModalOpen(true)}
+                  className="border-slate-600 text-white hover:bg-slate-700 w-full sm:w-auto"
+                >
+                  <Plus className="h-4 w-4 mr-1" />
+                  Add Add-on
+                </Button>
               </div>
               {addons.length === 0 ? (
                 <p className="text-slate-500 text-sm pl-7">No add-on purchases</p>
@@ -580,6 +593,21 @@ export const RegistrationDetailModal: FC<RegistrationDetailModalProps> = ({
         open={isAddTournamentModalOpen}
         onOpenChange={setIsAddTournamentModalOpen}
         onSuccess={fetchPurchaseDetails}
+        preselectedUser={registration ? {
+          id: registration.user_id,
+          firstName: registration.first_name,
+          lastName: registration.last_name,
+        } : null}
+      />
+
+      {/* Add Add-on Modal */}
+      <AddAddonModal
+        open={isAddAddonModalOpen}
+        onOpenChange={setIsAddAddonModalOpen}
+        onSuccess={() => {
+          fetchPurchaseDetails();
+          onRefresh?.();
+        }}
         preselectedUser={registration ? {
           id: registration.user_id,
           firstName: registration.first_name,

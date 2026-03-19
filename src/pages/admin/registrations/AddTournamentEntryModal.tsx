@@ -1,5 +1,5 @@
 import type { FC } from 'react';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -59,6 +59,9 @@ export const AddTournamentEntryModal: FC<AddTournamentEntryModalProps> = ({
   const [adminNotes, setAdminNotes] = useState('');
   const [createOrder, setCreateOrder] = useState(true);
 
+  // Debounce timer for user search
+  const debounceRef = useRef<NodeJS.Timeout>();
+
   // Submission state
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -110,8 +113,9 @@ export const AddTournamentEntryModal: FC<AddTournamentEntryModalProps> = ({
   };
 
   // Debounced user search
-  const handleUserSearch = useCallback(async (query: string) => {
+  const handleUserSearch = useCallback((query: string) => {
     setUserQuery(query);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
 
     if (query.length < 2) {
       setUserResults([]);
@@ -119,19 +123,21 @@ export const AddTournamentEntryModal: FC<AddTournamentEntryModalProps> = ({
       return;
     }
 
-    setIsSearching(true);
-    setShowUserResults(true);
+    debounceRef.current = setTimeout(async () => {
+      setIsSearching(true);
+      setShowUserResults(true);
 
-    try {
-      const results = await searchUsers(query);
-      setUserResults(results);
-    } catch (err) {
-      console.error('Error searching users:', err);
-      setUserResults([]);
-    } finally {
-      setIsSearching(false);
-    }
-  }, []);
+      try {
+        const results = await searchUsers(query);
+        setUserResults(results);
+      } catch (err) {
+        console.error('Error searching users:', err);
+        setUserResults([]);
+      } finally {
+        setIsSearching(false);
+      }
+    }, 300);
+  }, [searchUsers]);
 
   const handleSelectUser = (user: UserSearchResult) => {
     setSelectedUser(user);

@@ -93,6 +93,9 @@ export const SpecialEventCreate: FC = () => {
       created_by: null,
       stripe_price_id: null,
       stripe_product_id: null,
+      linked_addon_id: data.linkedAddonId || null,
+      stripe_early_bird_product_id: null,
+      reserved_registrations: 0,
     };
 
     setIsLoading(true);

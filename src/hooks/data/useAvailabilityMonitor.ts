@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import type { RealtimeChannel } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 import type { OrderItemType } from '@/types';
 
@@ -8,7 +9,10 @@ import type { OrderItemType } from '@/types';
 interface TournamentAvailability {
   id: string;
   currentParticipants: number;
+  reservedParticipants: number;
+  waitlistHeldSpots: number;
   maxParticipants: number;
+  effectiveAvailable: number;
   isAvailable: boolean;
 }
 
@@ -18,7 +22,9 @@ interface TournamentAvailability {
 interface AddonAvailability {
   id: string;
   stockQuantity: number | null;
+  reservedQuantity: number;
   hasInventory: boolean;
+  effectiveAvailable: number | null;
   isAvailable: boolean;
 }
 
@@ -32,12 +38,31 @@ interface AvailabilityCache {
 }
 
 /**
+ * Capacity info including reservations
+ */
+export interface CapacityInfo {
+  current: number;
+  reserved: number;
+  max: number;
+  effectiveAvailable: number;
+}
+
+/**
+ * Stock info including reservations
+ */
+export interface StockInfo {
+  stock: number | null;
+  reserved: number;
+  effectiveAvailable: number | null;
+}
+
+/**
  * Return type for the useAvailabilityMonitor hook
  */
 export interface UseAvailabilityMonitorResult {
   isAvailable: (itemId: string, itemType: OrderItemType) => boolean;
-  currentCapacity: (tournamentId: string) => { current: number; max: number } | null;
-  currentStock: (addonId: string) => number | null;
+  currentCapacity: (tournamentId: string) => CapacityInfo | null;
+  currentStock: (addonId: string) => StockInfo | null;
   subscribe: (itemId: string, itemType: OrderItemType) => void;
   unsubscribe: (itemId: string, itemType: OrderItemType) => void;
 }
@@ -62,7 +87,7 @@ export function useAvailabilityMonitor(): UseAvailabilityMonitorResult {
     lastUpdated: new Date().toISOString(),
   });
 
-  const subscriptionsRef = useRef<Map<string, any>>(new Map());
+  const subscriptionsRef = useRef<Map<string, RealtimeChannel>>(new Map());
   const subscribedItemsRef = useRef<Set<string>>(new Set());
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const reconnectTimeoutsRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
@@ -71,9 +96,10 @@ export function useAvailabilityMonitor(): UseAvailabilityMonitorResult {
    * Fetch tournament availability from database
    */
   const fetchTournamentAvailability = useCallback(async (tournamentId: string) => {
+    // Using select('*') for backwards compatibility during migration rollout.
     const { data, error } = await supabase
       .from('tournaments')
-      .select('id, current_participants, max_participants, status')
+      .select('*')
       .eq('id', tournamentId)
       .single();
 
@@ -82,11 +108,19 @@ export function useAvailabilityMonitor(): UseAvailabilityMonitorResult {
       return null;
     }
 
+    const reservedParticipants = data.reserved_participants || 0;
+    const waitlistHeldSpots = data.waitlist_held_spots || 0;
+    const effectiveUsed = data.current_participants + reservedParticipants + waitlistHeldSpots;
+    const effectiveAvailable = data.max_participants - effectiveUsed;
+
     const availability: TournamentAvailability = {
       id: data.id,
       currentParticipants: data.current_participants,
+      reservedParticipants,
+      waitlistHeldSpots,
       maxParticipants: data.max_participants,
-      isAvailable: data.status === 'open' && data.current_participants < data.max_participants,
+      effectiveAvailable,
+      isAvailable: data.status === 'open' && effectiveUsed < data.max_participants,
     };
 
     return availability;
@@ -98,7 +132,7 @@ export function useAvailabilityMonitor(): UseAvailabilityMonitorResult {
   const fetchAddonAvailability = useCallback(async (addonId: string) => {
     const { data, error } = await supabase
       .from('addons')
-      .select('id, stock_quantity, has_inventory, is_active')
+      .select('id, stock_quantity, reserved_quantity, has_inventory, is_active')
       .eq('id', addonId)
       .single();
 
@@ -107,11 +141,18 @@ export function useAvailabilityMonitor(): UseAvailabilityMonitorResult {
       return null;
     }
 
+    const reservedQuantity = data.reserved_quantity || 0;
+    const effectiveAvailable = data.has_inventory && data.stock_quantity !== null
+      ? data.stock_quantity - reservedQuantity
+      : null;
+
     const availability: AddonAvailability = {
       id: data.id,
       stockQuantity: data.stock_quantity,
+      reservedQuantity,
       hasInventory: data.has_inventory,
-      isAvailable: data.is_active && (!data.has_inventory || (data.stock_quantity !== null && data.stock_quantity > 0)),
+      effectiveAvailable,
+      isAvailable: data.is_active && (!data.has_inventory || (effectiveAvailable !== null && effectiveAvailable > 0)),
     };
 
     return availability;
@@ -365,26 +406,32 @@ export function useAvailabilityMonitor(): UseAvailabilityMonitorResult {
   }, [cache]);
 
   /**
-   * Get current capacity for a tournament
+   * Get current capacity for a tournament (including reservations)
    */
-  const currentCapacity = useCallback((tournamentId: string): { current: number; max: number } | null => {
+  const currentCapacity = useCallback((tournamentId: string): CapacityInfo | null => {
     const tournament = cache.tournaments.get(tournamentId);
     if (!tournament) return null;
-    
+
     return {
       current: tournament.currentParticipants,
+      reserved: tournament.reservedParticipants,
       max: tournament.maxParticipants,
+      effectiveAvailable: tournament.effectiveAvailable,
     };
   }, [cache]);
 
   /**
-   * Get current stock for an addon
+   * Get current stock for an addon (including reservations)
    */
-  const currentStock = useCallback((addonId: string): number | null => {
+  const currentStock = useCallback((addonId: string): StockInfo | null => {
     const addon = cache.addons.get(addonId);
     if (!addon) return null;
-    
-    return addon.stockQuantity;
+
+    return {
+      stock: addon.stockQuantity,
+      reserved: addon.reservedQuantity,
+      effectiveAvailable: addon.effectiveAvailable,
+    };
   }, [cache]);
 
   /**

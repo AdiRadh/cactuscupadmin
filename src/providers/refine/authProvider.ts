@@ -22,7 +22,7 @@ export const authProvider: AuthProvider = {
     if (data?.user) {
       return {
         success: true,
-        redirectTo: '/admin',
+        redirectTo: '/',
       };
     }
 

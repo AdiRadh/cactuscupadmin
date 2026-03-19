@@ -1194,7 +1194,7 @@ export interface RemoveItemResult {
  */
 export async function removeTournamentRegistration(
   registrationId: string,
-  tournamentId: string,
+  _tournamentId: string,
   refund: boolean = false,
   paymentIntentId?: string
 ): Promise<RemoveItemResult> {
@@ -1219,26 +1219,8 @@ export async function removeTournamentRegistration(
       throw new Error(`Failed to delete tournament registration: ${deleteError.message}`);
     }
 
-    // Update tournament current_registrations count (decrement)
-    const { error: updateError } = await adminClient.rpc('decrement_tournament_registrations', {
-      tournament_id: tournamentId,
-    });
-
-    // If RPC doesn't exist, try direct update
-    if (updateError) {
-      const { data: tournament } = await adminClient
-        .from('tournaments')
-        .select('current_registrations')
-        .eq('id', tournamentId)
-        .single();
-
-      if (tournament && tournament.current_registrations > 0) {
-        await adminClient
-          .from('tournaments')
-          .update({ current_registrations: tournament.current_registrations - 1 })
-          .eq('id', tournamentId);
-      }
-    }
+    // Tournament current_participants is handled by DB trigger on DELETE
+    // (see migration 20251111000002_add_participant_counter_triggers.sql)
 
     // Delete the order item if it exists
     if (orderItem && !orderItemError) {
@@ -1300,10 +1282,10 @@ export async function removeOrderItem(
       paymentIntentId = order?.stripe_payment_intent_id || undefined;
     }
 
-    // Get the item total before deleting
+    // Get the item total and variant info before deleting
     const { data: orderItem } = await adminClient
       .from('order_items')
-      .select('total')
+      .select('total, variant_name')
       .eq('id', orderItemId)
       .single();
 
@@ -1319,19 +1301,16 @@ export async function removeOrderItem(
       throw new Error(`Failed to delete order item: ${deleteError.message}`);
     }
 
-    // Update addon inventory (increment stock back)
+    // Atomically restore addon inventory (top-level + variant stock) via RPC
     if (addonId) {
-      const { data: addon } = await adminClient
-        .from('addons')
-        .select('has_inventory, stock_quantity')
-        .eq('id', addonId)
-        .single();
+      const { error: stockError } = await adminClient.rpc('admin_increment_addon_stock', {
+        p_addon_id: addonId,
+        p_quantity: quantity,
+        p_variant_name: orderItem?.variant_name || null,
+      });
 
-      if (addon?.has_inventory && addon.stock_quantity !== null) {
-        await adminClient
-          .from('addons')
-          .update({ stock_quantity: addon.stock_quantity + quantity })
-          .eq('id', addonId);
+      if (stockError) {
+        console.error('Error restoring addon stock:', stockError);
       }
     }
 

@@ -42,6 +42,8 @@ export const ActivityCreate: FC = () => {
       visible: data.visible,
       header_image_url: data.headerImageUrl || null,
       gallery_images: data.galleryImages,
+      reserved_participants: 0,
+      stripe_early_bird_product_id: null,
     };
 
     setIsLoading(true);

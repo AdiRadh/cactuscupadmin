@@ -53,7 +53,7 @@ export interface ListOptions {
   filters?: Array<{
     field: string;
     operator: string;
-    value: any;
+    value: unknown;
   }>;
 }
 
@@ -150,6 +150,10 @@ export function useAdmin(): UseAdminReturn {
   // ============================================================================
   // Generic CRUD Operations
   // ============================================================================
+
+  // NOTE: All CRUD operations share a single loading/error state. Concurrent operations
+  // will interfere with each other's loading state. Consider migrating to React Query
+  // or per-operation loading states in a future refactor.
 
   const create = useCallback(async <T,>(resource: string, data: T): Promise<void> => {
     setState({ loading: true, error: null });
@@ -289,6 +293,13 @@ export function useAdmin(): UseAdminReturn {
   }, [update]);
 
   const deleteTournament = useCallback(async (id: string): Promise<void> => {
+    const { count } = await supabase
+      .from('tournament_registrations')
+      .select('id', { count: 'exact', head: true })
+      .eq('tournament_id', id);
+    if (count && count > 0) {
+      throw new Error(`Cannot delete tournament: ${count} active registration(s) exist. Remove registrations first.`);
+    }
     await deleteResource('tournaments', id);
   }, [deleteResource]);
 
@@ -394,6 +405,7 @@ export function useAdmin(): UseAdminReturn {
   // Hotel Partner Operations
   // ============================================================================
 
+  // TODO: Move primary-hotel logic to a database RPC/transaction to prevent race conditions with concurrent updates.
   const createHotelPartner = useCallback(async (data: Omit<DbHotelPartner, 'id' | 'created_at' | 'updated_at'>): Promise<string> => {
     setState({ loading: true, error: null });
 
@@ -426,6 +438,7 @@ export function useAdmin(): UseAdminReturn {
     }
   }, []);
 
+  // TODO: Move primary-hotel logic to a database RPC/transaction to prevent race conditions with concurrent updates.
   const updateHotelPartner = useCallback(async (id: string, data: Partial<DbHotelPartner>): Promise<void> => {
     setState({ loading: true, error: null });
 

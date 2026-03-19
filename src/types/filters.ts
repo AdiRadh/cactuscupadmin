@@ -40,6 +40,35 @@ export const WAITLIST_STATUS_OPTIONS = [
 ] as const;
 
 // ============================================================================
+// Special Event Waitlist Filters
+// ============================================================================
+
+export interface SEWaitlistFilters {
+  status: WaitlistStatus | '';
+  specialEventId: string;
+  search: string;
+  dateFrom: string;
+  dateTo: string;
+}
+
+export type SEWaitlistSortField = 'position' | 'name' | 'email' | 'joinedAt';
+
+// ============================================================================
+// Addon Waitlist Filters
+// ============================================================================
+
+export interface AddonWaitlistFilters {
+  status: WaitlistStatus | '';
+  addonId: string;
+  variantName: string;
+  search: string;
+  dateFrom: string;
+  dateTo: string;
+}
+
+export type AddonWaitlistSortField = 'position' | 'name' | 'email' | 'joinedAt';
+
+// ============================================================================
 // Registration Filters
 // ============================================================================
 
@@ -184,4 +213,21 @@ export const DEFAULT_ADDON_FILTERS: AddonFilters = {
   category: '',
   isActive: 'all',
   inStock: 'all',
+};
+
+export const DEFAULT_SE_WAITLIST_FILTERS: SEWaitlistFilters = {
+  status: '',
+  specialEventId: 'all',
+  search: '',
+  dateFrom: '',
+  dateTo: '',
+};
+
+export const DEFAULT_ADDON_WAITLIST_FILTERS: AddonWaitlistFilters = {
+  status: '',
+  addonId: 'all',
+  variantName: 'all',
+  search: '',
+  dateFrom: '',
+  dateTo: '',
 };

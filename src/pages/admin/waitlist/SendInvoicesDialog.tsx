@@ -30,6 +30,8 @@ export const SendInvoicesDialog: FC<SendInvoicesDialogProps> = ({
 
   // Calculate invoices when dialog opens
   useEffect(() => {
+    let cancelled = false;
+
     if (open && selectedEntryIds.length > 0) {
       setIsLoading(true);
       setError(null);
@@ -38,16 +40,20 @@ export const SendInvoicesDialog: FC<SendInvoicesDialogProps> = ({
 
       calculateInvoices(selectedEntryIds)
         .then((calcs) => {
-          setCalculations(calcs);
+          if (!cancelled) setCalculations(calcs);
         })
         .catch((err) => {
           console.error('Error calculating invoices:', err);
-          setError(err instanceof Error ? err.message : 'Failed to calculate invoices');
+          if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to calculate invoices');
         })
         .finally(() => {
-          setIsLoading(false);
+          if (!cancelled) setIsLoading(false);
         });
     }
+
+    return () => {
+      cancelled = true;
+    };
   }, [open, selectedEntryIds, calculateInvoices]);
 
   const handleSend = async () => {

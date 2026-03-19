@@ -40,7 +40,16 @@ export type AuditAction =
   // Display Order
   | 'DISPLAY_ORDER_CHANGED'
   // Generic
-  | string;
+  | 'SETTINGS_UPDATED'
+  | 'REGISTRATION_CREATED'
+  | 'REGISTRATION_UPDATED'
+  | 'REGISTRATION_DELETED'
+  | 'WAITLIST_ENTRY_CREATED'
+  | 'WAITLIST_ENTRY_UPDATED'
+  | 'WAITLIST_ENTRY_DELETED'
+  | 'INVOICE_SENT'
+  | 'INVOICE_VOIDED'
+  | 'PAYMENT_REFUNDED';
 
 /**
  * Resource types for categorizing audit entries
@@ -64,7 +73,10 @@ export type ResourceType =
   | 'special_event_registrations'
   | 'user_roles'
   | 'profiles'
-  | string;
+  | 'event_registrations'
+  | 'waitlist_entries'
+  | 'waitlist_invoices'
+  | 'inventory_reservations';
 
 /**
  * Parameters for creating an audit log entry

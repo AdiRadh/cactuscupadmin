@@ -18,8 +18,9 @@ export const LoginPage: FC = () => {
   const [password, setPassword] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
 
-  // Get return URL from location state
-  const returnTo = (location.state as { returnTo?: string })?.returnTo || '/';
+  // Get return URL from location state (validated to prevent open redirect)
+  const rawReturnTo = (location.state as { returnTo?: string })?.returnTo || '/';
+  const returnTo = rawReturnTo.startsWith('/') && !rawReturnTo.startsWith('//') ? rawReturnTo : '/';
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>): Promise<void> => {
     e.preventDefault();

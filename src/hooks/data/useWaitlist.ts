@@ -360,52 +360,70 @@ export function useWaitlist(): UseWaitlistReturn {
     [client]
   );
 
+  // TODO: Add UNIQUE constraint on (tournament_id, position) and use an RPC for atomic position assignment. Concurrent calls could produce duplicate positions.
   const createWaitlistEntry = useCallback(
     async (data: CreateWaitlistEntryData): Promise<{ id: string; position: number }> => {
-      // Get the next position for this tournament
-      const { data: existingEntries, error: countError } = await client
-        .from('tournament_waitlist')
-        .select('position')
-        .eq('tournament_id', data.tournamentId)
-        .eq('status', 'waiting')
-        .order('position', { ascending: false })
-        .limit(1);
+      const attemptInsert = async (): Promise<{ id: string; position: number }> => {
+        // Get the next position for this tournament
+        const { data: existingEntries, error: countError } = await client
+          .from('tournament_waitlist')
+          .select('position')
+          .eq('tournament_id', data.tournamentId)
+          .eq('status', 'waiting')
+          .order('position', { ascending: false })
+          .limit(1);
 
-      if (countError) {
-        console.error('Error getting waitlist position:', countError);
-        throw countError;
-      }
+        if (countError) {
+          console.error('Error getting waitlist position:', countError);
+          throw countError;
+        }
 
-      const lastEntry = existingEntries?.[0];
-      const nextPosition = lastEntry ? lastEntry.position + 1 : 1;
+        const lastEntry = existingEntries?.[0];
+        const nextPosition = lastEntry ? lastEntry.position + 1 : 1;
 
-      // Create the waitlist entry
-      const now = new Date().toISOString();
-      const insertData = {
-        tournament_id: data.tournamentId,
-        user_id: data.userId,
-        email: data.email,
-        first_name: data.firstName,
-        last_name: data.lastName,
-        position: nextPosition,
-        status: 'waiting',
-        joined_at: now,
-        created_at: now,
-        updated_at: now,
+        // Create the waitlist entry
+        const now = new Date().toISOString();
+        const insertData = {
+          tournament_id: data.tournamentId,
+          user_id: data.userId,
+          email: data.email,
+          first_name: data.firstName,
+          last_name: data.lastName,
+          position: nextPosition,
+          status: 'waiting',
+          joined_at: now,
+          created_at: now,
+          updated_at: now,
+        };
+
+        const { data: newEntry, error: insertError } = await client
+          .from('tournament_waitlist')
+          .insert(insertData)
+          .select('id, position')
+          .single();
+
+        if (insertError) {
+          // Postgres unique constraint violation — retry with fresh position
+          if (insertError.code === '23505') {
+            throw Object.assign(new Error('Unique constraint violation'), { code: '23505' });
+          }
+          console.error('Error creating waitlist entry:', insertError);
+          throw insertError;
+        }
+
+        return { id: newEntry.id, position: newEntry.position };
       };
 
-      const { data: newEntry, error: insertError } = await client
-        .from('tournament_waitlist')
-        .insert(insertData)
-        .select('id, position')
-        .single();
-
-      if (insertError) {
-        console.error('Error creating waitlist entry:', insertError);
-        throw insertError;
+      try {
+        return await attemptInsert();
+      } catch (error: unknown) {
+        // Retry once on unique constraint violation (duplicate position race condition)
+        if (error && typeof error === 'object' && 'code' in error && (error as { code: string }).code === '23505') {
+          console.warn('Waitlist position conflict detected, retrying with fresh position...');
+          return await attemptInsert();
+        }
+        throw error;
       }
-
-      return { id: newEntry.id, position: newEntry.position };
     },
     [client]
   );

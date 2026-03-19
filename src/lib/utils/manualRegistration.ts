@@ -101,16 +101,8 @@ export async function addManualTournamentEntry(
       return { success: false, error: regError?.message || 'Failed to create registration' };
     }
 
-    // 4. Update tournament current_participants count
-    const { error: updateError } = await client
-      .from('tournaments')
-      .update({ current_participants: tournament.current_participants + 1 })
-      .eq('id', tournamentId);
-
-    if (updateError) {
-      console.error('Error updating tournament count:', updateError);
-      // Don't fail the whole operation, just log
-    }
+    // 4. Tournament current_participants is handled by DB trigger on INSERT
+    // (see migration 20251111000002_add_participant_counter_triggers.sql)
 
     // 5. Check if user has an event registration for this year, create one if not
     let eventRegistrationId: string | undefined;
@@ -422,4 +414,239 @@ export async function getAvailableTournaments(): Promise<AvailableTournament[]> 
     status: t.status,
     date: t.date,
   }));
+}
+
+// ============================================================================
+// Manual Add-on Purchase
+// ============================================================================
+
+export interface AvailableAddon {
+  id: string;
+  name: string;
+  category: string;
+  price: number; // in cents
+  hasInventory: boolean;
+  stockQuantity: number | null;
+  maxPerOrder: number | null;
+  hasVariants: boolean;
+  variants: { name: string; sku: string; priceModifier: number; stock: number | null }[] | null;
+  isActive: boolean;
+  imageUrl: string | null;
+}
+
+export interface AddManualAddonPurchaseParams {
+  userId: string;
+  addonId: string;
+  quantity: number;
+  variantName?: string | null;
+  unitPrice: number; // in cents (addon price + variant modifier)
+  adminNotes?: string;
+  eventYear?: number;
+  forceOutOfStock?: boolean; // allow override when out of stock
+}
+
+export interface ManualAddonResult {
+  success: boolean;
+  orderId?: string;
+  orderItemId?: string;
+  inventoryWarning?: string;
+  error?: string;
+}
+
+/**
+ * Get add-ons available for manual purchase
+ * @param includeInactive - If true, also returns inactive add-ons (for admin use)
+ */
+export async function getAvailableAddons(includeInactive = false): Promise<AvailableAddon[]> {
+  const client = supabaseAdmin ?? supabase;
+
+  let query = client
+    .from('addons')
+    .select('id, name, category, price, has_inventory, stock_quantity, max_per_order, has_variants, variants, is_active, image_url');
+
+  if (!includeInactive) {
+    query = query.eq('is_active', true);
+  }
+
+  const { data, error } = await query.order('sort_order', { ascending: true });
+
+  if (error) {
+    console.error('Error fetching addons:', error);
+    return [];
+  }
+
+  return (data || []).map((a) => ({
+    id: a.id,
+    name: a.name,
+    category: a.category,
+    price: a.price,
+    hasInventory: a.has_inventory ?? false,
+    stockQuantity: a.stock_quantity,
+    maxPerOrder: a.max_per_order,
+    hasVariants: a.has_variants ?? false,
+    variants: a.variants as AvailableAddon['variants'],
+    isActive: a.is_active ?? true,
+    imageUrl: a.image_url,
+  }));
+}
+
+/**
+ * Add a manual add-on purchase for a user (admin bypass of payment)
+ * Creates order + order_item and decrements inventory
+ */
+export async function addManualAddonPurchase(
+  params: AddManualAddonPurchaseParams
+): Promise<ManualAddonResult> {
+  const {
+    userId,
+    addonId,
+    quantity,
+    variantName = null,
+    unitPrice,
+    adminNotes,
+    eventYear = new Date().getFullYear(),
+    forceOutOfStock = false,
+  } = params;
+  const client = supabaseAdmin ?? supabase;
+
+  try {
+    // 1. Verify the addon exists
+    const { data: addon, error: addonError } = await client
+      .from('addons')
+      .select('id, name, has_inventory, stock_quantity, has_variants, variants')
+      .eq('id', addonId)
+      .single();
+
+    if (addonError || !addon) {
+      return { success: false, error: 'Add-on not found' };
+    }
+
+    // 2. Atomically check and decrement inventory via RPC (uses FOR UPDATE lock)
+    let inventoryWarning: string | undefined;
+    let stockDecremented = false;
+
+    if (addon.has_inventory) {
+      const { data: stockResult, error: stockError } = await client.rpc('admin_decrement_addon_stock', {
+        p_addon_id: addonId,
+        p_quantity: quantity,
+        p_variant_name: variantName,
+        p_force: forceOutOfStock,
+      });
+
+      const result = stockResult as { success: boolean; error?: string; available_stock?: number } | null;
+
+      if (stockError || !result?.success) {
+        const errorMsg = result?.error || stockError?.message || 'Stock check failed';
+        return {
+          success: false,
+          inventoryWarning: errorMsg,
+          error: errorMsg,
+        };
+      }
+
+      stockDecremented = true;
+    }
+
+    // 3. Ensure user has an event registration
+    const { data: existingEventReg } = await client
+      .from('event_registrations')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('event_year', eventYear)
+      .maybeSingle();
+
+    if (!existingEventReg) {
+      // Create event registration
+      const { error: eventRegError } = await client
+        .from('event_registrations')
+        .insert({
+          user_id: userId,
+          event_year: eventYear,
+          registration_fee: 0,
+          payment_status: 'completed',
+          registered_at: new Date().toISOString(),
+        });
+
+      if (eventRegError) {
+        console.error('Error creating event registration:', eventRegError);
+      }
+    }
+
+    // 4. Create order
+    const total = unitPrice * quantity;
+    const orderNumber = `MANUAL-ADDON-${Date.now()}-${Math.random().toString(36).slice(2, 7).toUpperCase()}`;
+
+    const { data: order, error: orderError } = await client
+      .from('orders')
+      .insert({
+        user_id: userId,
+        order_number: orderNumber,
+        subtotal: total,
+        tax: 0,
+        total,
+        payment_status: 'completed',
+        order_status: 'completed',
+        fulfillment_status: 'pending',
+        admin_notes: adminNotes || 'Manual add-on added by admin',
+        paid_at: new Date().toISOString(),
+      })
+      .select('id')
+      .single();
+
+    if (orderError || !order) {
+      console.error('Error creating order:', orderError);
+      return { success: false, error: orderError?.message || 'Failed to create order' };
+    }
+
+    // 5. Create order item
+    const { data: orderItem, error: orderItemError } = await client
+      .from('order_items')
+      .insert({
+        order_id: order.id,
+        item_type: 'addon',
+        item_id: addonId,
+        addon_id: addonId,
+        item_name: addon.name,
+        item_description: adminNotes || 'Manual add-on added by admin',
+        variant_name: variantName,
+        unit_price: unitPrice,
+        quantity,
+        subtotal: total,
+        tax: 0,
+        total,
+        discount_amount: 0,
+      })
+      .select('id')
+      .single();
+
+    if (orderItemError || !orderItem) {
+      // Roll back the orphaned order
+      await client.from('orders').delete().eq('id', order.id);
+      // Reverse the stock decrement if it was already applied
+      if (stockDecremented) {
+        await client.rpc('admin_increment_addon_stock', {
+          p_addon_id: addonId,
+          p_quantity: quantity,
+          p_variant_name: variantName,
+        });
+      }
+      console.error('Error creating order item:', orderItemError);
+      return { success: false, error: orderItemError?.message || 'Failed to create order item' };
+    }
+
+    // 6. Inventory was already decremented atomically in step 2
+
+    return {
+      success: true,
+      orderId: order.id,
+      orderItemId: orderItem.id,
+      inventoryWarning,
+    };
+  } catch (err) {
+    console.error('Manual addon purchase failed:', err);
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Unknown error',
+    };
+  }
 }

@@ -1,5 +1,5 @@
 import type { FC } from 'react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -29,16 +29,21 @@ export const PendingBilling: FC = () => {
     userEmail: '',
   });
 
-  const fetchUsers = async () => {
+  const fetchUsers = useCallback(async () => {
     setLoading(true);
-    const data = await getUsersWithPromotedEntries();
-    setUsers(data);
-    setLoading(false);
-  };
+    try {
+      const data = await getUsersWithPromotedEntries();
+      setUsers(data);
+    } catch (err) {
+      console.error('Error fetching users with promoted entries:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [getUsersWithPromotedEntries]);
 
   useEffect(() => {
     void fetchUsers();
-  }, [getUsersWithPromotedEntries]);
+  }, [fetchUsers]);
 
   const formatCurrency = (cents: number) => {
     return new Intl.NumberFormat('en-US', {

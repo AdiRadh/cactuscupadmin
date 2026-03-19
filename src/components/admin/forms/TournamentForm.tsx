@@ -1,5 +1,5 @@
 import type { FC } from 'react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, Input, Label, Textarea, NativeSelect, Button } from '@/components/ui';
 import type { Tournament, WeaponType, DivisionType, TournamentStatus } from '@/types';
 import { ImageUpload } from './ImageUpload';
@@ -96,9 +96,11 @@ export const TournamentForm: FC<TournamentFormProps> = ({
   });
 
   const [errors, setErrors] = useState<Partial<Record<keyof TournamentFormData, string>>>({});
+  const slugManuallyEdited = useRef(false);
 
   // Auto-generate slug from name
   useEffect(() => {
+    if (slugManuallyEdited.current) return;
     if (!initialData && formData.name) {
       const slug = formData.name
         .toLowerCase()
@@ -112,6 +114,9 @@ export const TournamentForm: FC<TournamentFormProps> = ({
     field: keyof TournamentFormData,
     value: string | number | boolean | null
   ) => {
+    if (field === 'slug') {
+      slugManuallyEdited.current = true;
+    }
     setFormData((prev) => ({ ...prev, [field]: value }));
     // Clear error for this field
     if (errors[field]) {

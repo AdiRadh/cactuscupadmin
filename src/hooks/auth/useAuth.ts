@@ -42,6 +42,11 @@ export function useAuth(): UseAuthReturn {
 
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const userRef = useRef(state.user);
+  const sessionRef = useRef(state.session);
+  useEffect(() => { userRef.current = state.user; }, [state.user]);
+  useEffect(() => { sessionRef.current = state.session; }, [state.session]);
+
   // Session timeout handler - logs out user after inactivity
   const resetSessionTimeout = useCallback(() => {
     if (timeoutRef.current) {
@@ -49,13 +54,13 @@ export function useAuth(): UseAuthReturn {
     }
 
     // Only set timeout if user is logged in
-    if (state.user) {
+    if (userRef.current) {
       const timeoutAt = new Date(Date.now() + SESSION_TIMEOUT_MS);
       console.log('[SESSION] Activity detected, resetting timeout. Will expire at:', timeoutAt.toISOString());
 
       // Log current token expiration for debugging
-      if (state.session?.expires_at) {
-        const tokenExpiry = new Date(state.session.expires_at * 1000);
+      if (sessionRef.current?.expires_at) {
+        const tokenExpiry = new Date(sessionRef.current.expires_at * 1000);
         const now = new Date();
         const minutesUntilExpiry = Math.round((tokenExpiry.getTime() - now.getTime()) / 60000);
         console.log('[SESSION] JWT token status:', {
@@ -67,7 +72,7 @@ export function useAuth(): UseAuthReturn {
 
       timeoutRef.current = setTimeout(async () => {
         console.warn('[SESSION] Session timeout triggered - logging out due to 30 minutes of inactivity');
-        console.warn('[SESSION] User being logged out:', state.user?.email);
+        console.warn('[SESSION] User being logged out:', userRef.current?.email);
         await supabase.auth.signOut();
         setState({
           user: null,
@@ -77,7 +82,7 @@ export function useAuth(): UseAuthReturn {
         });
       }, SESSION_TIMEOUT_MS);
     }
-  }, [state.user, state.session]);
+  }, []);
 
   // Set up activity listeners for session timeout
   useEffect(() => {

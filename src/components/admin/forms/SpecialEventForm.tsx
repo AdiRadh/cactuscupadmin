@@ -1,7 +1,9 @@
 import type { FC } from 'react';
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, Input, Label, Textarea, NativeSelect, Button } from '@/components/ui';
-import type { SpecialEvent, SpecialEventStatus } from '@/types';
+import type { SpecialEvent, SpecialEventStatus, Addon } from '@/types';
+import { dbToAddon } from '@/types';
+import { supabase } from '@/lib/supabase';
 import { ImageUpload } from './ImageUpload';
 import { utcToDatetimeLocal, formatDateTime } from '@/lib/utils/dateUtils';
 
@@ -57,6 +59,9 @@ export interface SpecialEventFormData {
   isActive: boolean;
   status: SpecialEventStatus;
   visible: boolean;
+
+  // Linked Add-on
+  linkedAddonId: string | null;
 }
 
 interface SpecialEventFormProps {
@@ -151,9 +156,28 @@ export const SpecialEventForm: FC<SpecialEventFormProps> = ({
     isActive: initialData?.isActive ?? false,
     status: initialData?.status || 'draft',
     visible: initialData?.visible ?? true,
+
+    // Linked Add-on
+    linkedAddonId: initialData?.linkedAddonId || null,
   });
 
   const [errors, setErrors] = useState<Partial<Record<keyof SpecialEventFormData, string>>>({});
+  const [availableAddons, setAvailableAddons] = useState<Addon[]>([]);
+
+  // Fetch addons for the linked addon dropdown
+  useEffect(() => {
+    const fetchAddons = async () => {
+      const { data, error } = await supabase
+        .from('addons')
+        .select('*')
+        .order('name', { ascending: true });
+
+      if (!error && data) {
+        setAvailableAddons(data.map(dbToAddon));
+      }
+    };
+    void fetchAddons();
+  }, []);
 
   // Auto-generate slug from title
   useEffect(() => {
@@ -847,6 +871,25 @@ export const SpecialEventForm: FC<SpecialEventFormProps> = ({
             <Label htmlFor="visible" className="cursor-pointer">
               Visible on public site
             </Label>
+          </div>
+
+          <div>
+            <Label htmlFor="linkedAddonId">Linked Add-on</Label>
+            <NativeSelect
+              id="linkedAddonId"
+              value={formData.linkedAddonId || ''}
+              onChange={(e) => handleChange('linkedAddonId', e.target.value || null)}
+              options={[
+                { value: '', label: 'None' },
+                ...availableAddons.map((addon) => ({
+                  value: addon.id,
+                  label: addon.name,
+                })),
+              ]}
+            />
+            <p className="text-sm text-gray-600 mt-1">
+              Link to an add-on to share inventory and pricing. When linked, the add-on controls stock and display.
+            </p>
           </div>
         </CardContent>
       </Card>

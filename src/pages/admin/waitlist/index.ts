@@ -1,3 +1,10 @@
 export { WaitlistList } from './WaitlistList';
 export { WaitlistEditModal } from './WaitlistEditModal';
 export { WaitlistCreateModal } from './WaitlistCreateModal';
+export { TournamentWaitlistTab } from './TournamentWaitlistTab';
+export { SpecialEventWaitlistTab } from './SpecialEventWaitlistTab';
+export { AddonWaitlistTab } from './AddonWaitlistTab';
+export { SEWaitlistCreateModal } from './SEWaitlistCreateModal';
+export { AddonWaitlistCreateModal } from './AddonWaitlistCreateModal';
+export { SEVerificationDialog } from './SEVerificationDialog';
+export { AddonVerificationDialog } from './AddonVerificationDialog';

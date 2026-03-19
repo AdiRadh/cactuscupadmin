@@ -48,6 +48,8 @@ export const TournamentCreate: FC = () => {
       stripe_price_id: null,
       stripe_product_id: null,
       display_order: 0,
+      reserved_participants: 0,
+      stripe_early_bird_product_id: null,
     };
 
     setIsLoading(true);

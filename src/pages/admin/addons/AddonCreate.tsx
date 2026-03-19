@@ -37,6 +37,7 @@ export const AddonCreate: FC = () => {
       available_until: null,
       stripe_product_id: null,
       stripe_price_id: null,
+      reserved_quantity: 0,
     };
 
     setIsLoading(true);

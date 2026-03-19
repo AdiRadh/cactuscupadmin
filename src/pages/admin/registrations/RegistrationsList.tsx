@@ -1,5 +1,5 @@
 import type { FC } from 'react';
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui';
@@ -228,7 +228,7 @@ export const RegistrationsList: FC = () => {
     sort,
   ]);
 
-  const fetchRegistrations = async () => {
+  const fetchRegistrations = useCallback(async () => {
     setIsLoading(true);
     setError(null);
 
@@ -353,11 +353,11 @@ export const RegistrationsList: FC = () => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [client]);
 
   useEffect(() => {
-    fetchRegistrations();
-  }, []);
+    void fetchRegistrations();
+  }, [fetchRegistrations]);
 
   const getPaymentBadge = (status: string) => {
     switch (status) {

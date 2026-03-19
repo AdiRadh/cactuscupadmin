@@ -11,17 +11,40 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Label } from '@/components/ui/Label';
 import { Loader2, Save } from 'lucide-react';
-import type { WaitlistEntry, WaitlistStatus } from '@/types';
-import type { PromotionResult } from '@/hooks/data/useWaitlist';
+import type { WaitlistStatus } from '@/types';
 import { CapacityWarningDialog } from './CapacityWarningDialog';
+
+interface EditableWaitlistEntry {
+  id: string;
+  firstName: string;
+  lastName: string;
+  position: number;
+  status: WaitlistStatus;
+  entityName?: string;
+}
+
+interface PromotionResultLike {
+  success: boolean;
+  needsConfirmation?: boolean;
+  warning?: string;
+  error?: string;
+  currentParticipants?: number;
+  currentRegistrations?: number;
+  maxParticipants?: number;
+  maxCapacity?: number;
+  reservedParticipants?: number;
+  reservedRegistrations?: number;
+}
 
 interface WaitlistEditModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  entry: WaitlistEntry | null;
+  entry: EditableWaitlistEntry | null;
   onSave: (id: string, data: { position?: number; status?: WaitlistStatus }) => Promise<void>;
-  promoteWaitlistUser: (entryId: string, bypassCapacity?: boolean) => Promise<PromotionResult>;
+  promoteWaitlistUser: (entryId: string, bypassCapacity?: boolean) => Promise<PromotionResultLike>;
   onPromotionSuccess?: () => void;
+  entityLabel?: string;
+  showCapacityWarning?: boolean;
 }
 
 export const WaitlistEditModal: FC<WaitlistEditModalProps> = ({
@@ -31,6 +54,8 @@ export const WaitlistEditModal: FC<WaitlistEditModalProps> = ({
   onSave,
   promoteWaitlistUser,
   onPromotionSuccess,
+  entityLabel = 'Tournament',
+  showCapacityWarning: enableCapacityWarning = true,
 }) => {
   const [position, setPosition] = useState<number>(1);
   const [status, setStatus] = useState<WaitlistStatus>('waiting');
@@ -68,12 +93,12 @@ export const WaitlistEditModal: FC<WaitlistEditModalProps> = ({
       if (status === 'promoted' && entry.status === 'waiting') {
         const result = await promoteWaitlistUser(entry.id, false);
 
-        if (result.needsConfirmation) {
-          // Tournament is at capacity - show warning dialog
+        if (enableCapacityWarning && result.needsConfirmation) {
+          // Entity is at capacity - show warning dialog
           setCapacityInfo({
-            current: result.currentParticipants!,
-            max: result.maxParticipants!,
-            reserved: result.reservedParticipants || 0,
+            current: result.currentParticipants ?? result.currentRegistrations ?? 0,
+            max: result.maxParticipants ?? result.maxCapacity ?? 0,
+            reserved: result.reservedParticipants ?? result.reservedRegistrations ?? 0,
           });
           setShowCapacityWarning(true);
           setIsSaving(false);
@@ -150,7 +175,7 @@ export const WaitlistEditModal: FC<WaitlistEditModalProps> = ({
               Edit Waitlist Entry
             </DialogTitle>
             <DialogDescription className="text-slate-400">
-              {entry.firstName} {entry.lastName} - {entry.tournamentName}
+              {entry.firstName} {entry.lastName}{entry.entityName ? ` - ${entry.entityName}` : ''}
             </DialogDescription>
           </DialogHeader>
 
@@ -248,6 +273,7 @@ export const WaitlistEditModal: FC<WaitlistEditModalProps> = ({
           reservedParticipants={capacityInfo.reserved}
           userName={`${entry.firstName} ${entry.lastName}`}
           isLoading={isPromoting}
+          entityLabel={entityLabel}
         />
       )}
     </>

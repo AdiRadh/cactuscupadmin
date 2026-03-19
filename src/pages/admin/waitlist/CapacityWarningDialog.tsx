@@ -20,6 +20,7 @@ interface CapacityWarningDialogProps {
   reservedParticipants: number;
   userName: string;
   isLoading?: boolean;
+  entityLabel?: string;
 }
 
 export const CapacityWarningDialog: FC<CapacityWarningDialogProps> = ({
@@ -32,6 +33,7 @@ export const CapacityWarningDialog: FC<CapacityWarningDialogProps> = ({
   reservedParticipants,
   userName,
   isLoading = false,
+  entityLabel = 'Tournament',
 }) => {
   const handleCancel = () => {
     onCancel();
@@ -47,7 +49,7 @@ export const CapacityWarningDialog: FC<CapacityWarningDialogProps> = ({
               <AlertTriangle className="h-5 w-5 text-orange-400" />
             </div>
             <div>
-              <DialogTitle className="text-lg text-white">Tournament at Capacity</DialogTitle>
+              <DialogTitle className="text-lg text-white">{entityLabel} at Capacity</DialogTitle>
               <DialogDescription className="mt-1 text-slate-400">
                 This action will increase the participant cap
               </DialogDescription>

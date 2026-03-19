@@ -79,11 +79,13 @@ export type Database = {
           instructor: string | null
           max_participants: number | null
           requires_registration: boolean | null
+          reserved_participants: number
           skill_level: string | null
           slug: string
           start_time: string
           status: string | null
           stripe_early_bird_price_id: string | null
+          stripe_early_bird_product_id: string | null
           stripe_price_id: string | null
           stripe_product_id: string | null
           title: string
@@ -107,11 +109,13 @@ export type Database = {
           instructor?: string | null
           max_participants?: number | null
           requires_registration?: boolean | null
+          reserved_participants?: number
           skill_level?: string | null
           slug: string
           start_time: string
           status?: string | null
           stripe_early_bird_price_id?: string | null
+          stripe_early_bird_product_id?: string | null
           stripe_price_id?: string | null
           stripe_product_id?: string | null
           title: string
@@ -135,11 +139,13 @@ export type Database = {
           instructor?: string | null
           max_participants?: number | null
           requires_registration?: boolean | null
+          reserved_participants?: number
           skill_level?: string | null
           slug?: string
           start_time?: string
           status?: string | null
           stripe_early_bird_price_id?: string | null
+          stripe_early_bird_product_id?: string | null
           stripe_price_id?: string | null
           stripe_product_id?: string | null
           title?: string
@@ -220,6 +226,7 @@ export type Database = {
           max_per_order: number | null
           name: string
           price: number
+          reserved_quantity: number
           slug: string
           sort_order: number | null
           stock_quantity: number | null
@@ -244,6 +251,7 @@ export type Database = {
           max_per_order?: number | null
           name: string
           price?: number
+          reserved_quantity?: number
           slug: string
           sort_order?: number | null
           stock_quantity?: number | null
@@ -268,6 +276,7 @@ export type Database = {
           max_per_order?: number | null
           name?: string
           price?: number
+          reserved_quantity?: number
           slug?: string
           sort_order?: number | null
           stock_quantity?: number | null
@@ -284,39 +293,84 @@ export type Database = {
           created_at: string | null
           id: string
           ip_address: string | null
+          metadata: Json | null
           new_values: Json | null
           old_values: Json | null
           resource_id: string | null
           resource_name: string | null
           resource_type: string
+          severity: string | null
           user_agent: string | null
-          user_id: string
+          user_id: string | null
         }
         Insert: {
           action: string
           created_at?: string | null
           id?: string
           ip_address?: string | null
+          metadata?: Json | null
           new_values?: Json | null
           old_values?: Json | null
           resource_id?: string | null
           resource_name?: string | null
           resource_type: string
+          severity?: string | null
           user_agent?: string | null
-          user_id: string
+          user_id?: string | null
         }
         Update: {
           action?: string
           created_at?: string | null
           id?: string
           ip_address?: string | null
+          metadata?: Json | null
           new_values?: Json | null
           old_values?: Json | null
           resource_id?: string | null
           resource_name?: string | null
           resource_type?: string
+          severity?: string | null
           user_agent?: string | null
-          user_id?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      boldsign_oauth_tokens: {
+        Row: {
+          access_token: string
+          created_at: string | null
+          created_by: string | null
+          expires_at: string
+          id: string
+          is_active: boolean | null
+          refresh_token: string | null
+          scope: string | null
+          token_type: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          access_token: string
+          created_at?: string | null
+          created_by?: string | null
+          expires_at: string
+          id?: string
+          is_active?: boolean | null
+          refresh_token?: string | null
+          scope?: string | null
+          token_type?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          access_token?: string
+          created_at?: string | null
+          created_by?: string | null
+          expires_at?: string
+          id?: string
+          is_active?: boolean | null
+          refresh_token?: string | null
+          scope?: string | null
+          token_type?: string | null
+          updated_at?: string | null
         }
         Relationships: []
       }
@@ -369,6 +423,9 @@ export type Database = {
           registration_fee: number
           updated_at: string | null
           user_id: string
+          waiver_signed: boolean | null
+          waiver_signed_at: string | null
+          waiver_signing_id: string | null
         }
         Insert: {
           created_at?: string | null
@@ -379,6 +436,9 @@ export type Database = {
           registration_fee?: number
           updated_at?: string | null
           user_id: string
+          waiver_signed?: boolean | null
+          waiver_signed_at?: string | null
+          waiver_signing_id?: string | null
         }
         Update: {
           created_at?: string | null
@@ -389,8 +449,19 @@ export type Database = {
           registration_fee?: number
           updated_at?: string | null
           user_id?: string
+          waiver_signed?: boolean | null
+          waiver_signed_at?: string | null
+          waiver_signing_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "event_registrations_waiver_signing_id_fkey"
+            columns: ["waiver_signing_id"]
+            isOneToOne: false
+            referencedRelation: "waiver_signings"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       guest_instructors: {
         Row: {
@@ -547,6 +618,72 @@ export type Database = {
           threshold_percentage?: number
         }
         Relationships: []
+      }
+      inventory_reservations: {
+        Row: {
+          confirmed_at: string | null
+          created_at: string | null
+          expires_at: string
+          id: string
+          item_id: string
+          item_type: string
+          order_id: string
+          quantity: number
+          released_at: string | null
+          status: string
+          stripe_session_id: string | null
+          updated_at: string | null
+          user_id: string
+          variant_key: string | null
+        }
+        Insert: {
+          confirmed_at?: string | null
+          created_at?: string | null
+          expires_at: string
+          id?: string
+          item_id: string
+          item_type: string
+          order_id: string
+          quantity?: number
+          released_at?: string | null
+          status?: string
+          stripe_session_id?: string | null
+          updated_at?: string | null
+          user_id: string
+          variant_key?: string | null
+        }
+        Update: {
+          confirmed_at?: string | null
+          created_at?: string | null
+          expires_at?: string
+          id?: string
+          item_id?: string
+          item_type?: string
+          order_id?: string
+          quantity?: number
+          released_at?: string | null
+          status?: string
+          stripe_session_id?: string | null
+          updated_at?: string | null
+          user_id?: string
+          variant_key?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inventory_reservations_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventory_reservations_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       order_items: {
         Row: {
@@ -936,6 +1073,57 @@ export type Database = {
         }
         Relationships: []
       }
+      spectator_registrations: {
+        Row: {
+          id: string
+          user_id: string
+          event_year: number
+          registration_fee: number
+          payment_status: string
+          order_id: string | null
+          registered_at: string | null
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          event_year?: number
+          registration_fee?: number
+          payment_status?: string
+          order_id?: string | null
+          registered_at?: string | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          event_year?: number
+          registration_fee?: number
+          payment_status?: string
+          order_id?: string | null
+          registered_at?: string | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "spectator_registrations_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "spectator_registrations_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
       special_event_registrations: {
         Row: {
           amount_paid: number | null
@@ -1059,10 +1247,12 @@ export type Database = {
           registration_open: boolean | null
           registration_opens_at: string | null
           registration_start_date: string | null
+          reserved_registrations: number
           slug: string
           start_time: string | null
           status: string | null
           stripe_early_bird_price_id: string | null
+          stripe_early_bird_product_id: string | null
           stripe_price_id: string | null
           stripe_product_id: string | null
           subtitle: string | null
@@ -1113,10 +1303,12 @@ export type Database = {
           registration_open?: boolean | null
           registration_opens_at?: string | null
           registration_start_date?: string | null
+          reserved_registrations?: number
           slug: string
           start_time?: string | null
           status?: string | null
           stripe_early_bird_price_id?: string | null
+          stripe_early_bird_product_id?: string | null
           stripe_price_id?: string | null
           stripe_product_id?: string | null
           subtitle?: string | null
@@ -1167,10 +1359,12 @@ export type Database = {
           registration_open?: boolean | null
           registration_opens_at?: string | null
           registration_start_date?: string | null
+          reserved_registrations?: number
           slug?: string
           start_time?: string | null
           status?: string | null
           stripe_early_bird_price_id?: string | null
+          stripe_early_bird_product_id?: string | null
           stripe_price_id?: string | null
           stripe_product_id?: string | null
           subtitle?: string | null
@@ -1305,6 +1499,66 @@ export type Database = {
           },
         ]
       }
+      tournament_waitlist: {
+        Row: {
+          created_at: string | null
+          email: string
+          first_name: string
+          id: string
+          joined_at: string | null
+          last_name: string
+          position: number
+          promoted_at: string | null
+          status: string
+          tournament_id: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          email: string
+          first_name: string
+          id?: string
+          joined_at?: string | null
+          last_name: string
+          position: number
+          promoted_at?: string | null
+          status?: string
+          tournament_id: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          email?: string
+          first_name?: string
+          id?: string
+          joined_at?: string | null
+          last_name?: string
+          position?: number
+          promoted_at?: string | null
+          status?: string
+          tournament_id?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tournament_waitlist_tournament_id_fkey"
+            columns: ["tournament_id"]
+            isOneToOne: false
+            referencedRelation: "tournaments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tournament_waitlist_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tournaments: {
         Row: {
           created_at: string | null
@@ -1327,6 +1581,7 @@ export type Database = {
           registration_end_date: string | null
           registration_fee: number
           registration_start_date: string | null
+          reserved_participants: number
           rules: string | null
           rules_content: string | null
           rules_pdf_url: string | null
@@ -1334,6 +1589,7 @@ export type Database = {
           start_time: string
           status: string | null
           stripe_early_bird_price_id: string | null
+          stripe_early_bird_product_id: string | null
           stripe_price_id: string | null
           stripe_product_id: string | null
           updated_at: string | null
@@ -1361,6 +1617,7 @@ export type Database = {
           registration_end_date?: string | null
           registration_fee?: number
           registration_start_date?: string | null
+          reserved_participants?: number
           rules?: string | null
           rules_content?: string | null
           rules_pdf_url?: string | null
@@ -1368,6 +1625,7 @@ export type Database = {
           start_time: string
           status?: string | null
           stripe_early_bird_price_id?: string | null
+          stripe_early_bird_product_id?: string | null
           stripe_price_id?: string | null
           stripe_product_id?: string | null
           updated_at?: string | null
@@ -1395,6 +1653,7 @@ export type Database = {
           registration_end_date?: string | null
           registration_fee?: number
           registration_start_date?: string | null
+          reserved_participants?: number
           rules?: string | null
           rules_content?: string | null
           rules_pdf_url?: string | null
@@ -1402,6 +1661,7 @@ export type Database = {
           start_time?: string
           status?: string | null
           stripe_early_bird_price_id?: string | null
+          stripe_early_bird_product_id?: string | null
           stripe_price_id?: string | null
           stripe_product_id?: string | null
           updated_at?: string | null
@@ -1489,6 +1749,192 @@ export type Database = {
           },
         ]
       }
+      waitlist_spot_notifications: {
+        Row: {
+          created_at: string | null
+          id: string
+          processed: boolean | null
+          processed_at: string | null
+          processed_by: string | null
+          spots_available: number
+          tournament_id: string
+          tournament_name: string
+          waitlist_count: number
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          processed?: boolean | null
+          processed_at?: string | null
+          processed_by?: string | null
+          spots_available?: number
+          tournament_id: string
+          tournament_name: string
+          waitlist_count?: number
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          processed?: boolean | null
+          processed_at?: string | null
+          processed_by?: string | null
+          spots_available?: number
+          tournament_id?: string
+          tournament_name?: string
+          waitlist_count?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "waitlist_spot_notifications_processed_by_fkey"
+            columns: ["processed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "waitlist_spot_notifications_tournament_id_fkey"
+            columns: ["tournament_id"]
+            isOneToOne: false
+            referencedRelation: "tournaments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      waiver_signings: {
+        Row: {
+          boldsign_document_id: string | null
+          boldsign_sender_document_id: string | null
+          created_at: string | null
+          event_registration_id: string | null
+          event_year: number
+          expires_at: string | null
+          id: string
+          sent_at: string | null
+          signed_at: string | null
+          signed_ip_address: string | null
+          signed_user_agent: string | null
+          signer_email: string
+          signer_name: string
+          status: string
+          template_id: string | null
+          updated_at: string | null
+          user_id: string
+          viewed_at: string | null
+          waiver_template_id: string | null
+          waiver_version: string | null
+        }
+        Insert: {
+          boldsign_document_id?: string | null
+          boldsign_sender_document_id?: string | null
+          created_at?: string | null
+          event_registration_id?: string | null
+          event_year?: number
+          expires_at?: string | null
+          id?: string
+          sent_at?: string | null
+          signed_at?: string | null
+          signed_ip_address?: string | null
+          signed_user_agent?: string | null
+          signer_email: string
+          signer_name: string
+          status?: string
+          template_id?: string | null
+          updated_at?: string | null
+          user_id: string
+          viewed_at?: string | null
+          waiver_template_id?: string | null
+          waiver_version?: string | null
+        }
+        Update: {
+          boldsign_document_id?: string | null
+          boldsign_sender_document_id?: string | null
+          created_at?: string | null
+          event_registration_id?: string | null
+          event_year?: number
+          expires_at?: string | null
+          id?: string
+          sent_at?: string | null
+          signed_at?: string | null
+          signed_ip_address?: string | null
+          signed_user_agent?: string | null
+          signer_email?: string
+          signer_name?: string
+          status?: string
+          template_id?: string | null
+          updated_at?: string | null
+          user_id?: string
+          viewed_at?: string | null
+          waiver_template_id?: string | null
+          waiver_version?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "waiver_signings_event_registration_id_fkey"
+            columns: ["event_registration_id"]
+            isOneToOne: false
+            referencedRelation: "event_registrations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "waiver_signings_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "waiver_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      waiver_templates: {
+        Row: {
+          boldsign_template_id: string | null
+          created_at: string | null
+          description: string | null
+          event_year: number | null
+          id: string
+          is_active: boolean | null
+          is_required: boolean | null
+          name: string
+          pdf_url: string | null
+          slug: string
+          sort_order: number | null
+          title: string
+          updated_at: string | null
+          validity_days: number | null
+        }
+        Insert: {
+          boldsign_template_id?: string | null
+          created_at?: string | null
+          description?: string | null
+          event_year?: number | null
+          id?: string
+          is_active?: boolean | null
+          is_required?: boolean | null
+          name: string
+          pdf_url?: string | null
+          slug: string
+          sort_order?: number | null
+          title: string
+          updated_at?: string | null
+          validity_days?: number | null
+        }
+        Update: {
+          boldsign_template_id?: string | null
+          created_at?: string | null
+          description?: string | null
+          event_year?: number | null
+          id?: string
+          is_active?: boolean | null
+          is_required?: boolean | null
+          name?: string
+          pdf_url?: string | null
+          slug?: string
+          sort_order?: number | null
+          title?: string
+          updated_at?: string | null
+          validity_days?: number | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -1520,8 +1966,39 @@ export type Database = {
       }
       assign_admin_role: { Args: { user_email: string }; Returns: string }
       assign_organizer_role: { Args: { user_email: string }; Returns: string }
+      confirm_inventory_reservation: {
+        Args: { p_order_id: string }
+        Returns: number
+      }
+      create_audit_log: {
+        Args: {
+          p_action: string
+          p_metadata?: Json
+          p_new_values?: Json
+          p_old_values?: Json
+          p_resource_id?: string
+          p_resource_name?: string
+          p_resource_type: string
+          p_severity?: string
+          p_user_id?: string
+        }
+        Returns: string
+      }
+      create_inventory_reservation: {
+        Args: {
+          p_hold_minutes?: number
+          p_item_id: string
+          p_item_type: string
+          p_order_id: string
+          p_quantity?: number
+          p_user_id: string
+          p_variant_key?: string
+        }
+        Returns: Json
+      }
       generate_order_number: { Args: never; Returns: string }
       get_activity_image_url: { Args: { bucket_path: string }; Returns: string }
+      get_boldsign_access_token: { Args: never; Returns: string }
       get_hotel_partner_image_url: {
         Args: { bucket_path: string }
         Returns: string
@@ -1537,6 +2014,15 @@ export type Database = {
       has_role: {
         Args: { role_name: string; user_uuid: string }
         Returns: boolean
+      }
+      release_expired_reservations: { Args: never; Returns: number }
+      release_inventory_reservation: {
+        Args: { p_reason?: string; p_reservation_id: string }
+        Returns: boolean
+      }
+      release_order_reservations: {
+        Args: { p_order_id: string; p_reason?: string }
+        Returns: number
       }
     }
     Enums: {

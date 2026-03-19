@@ -106,6 +106,10 @@ export function useListFilters<
   const [filters, setFiltersState] = useState<TFilters>(parseFiltersFromUrl);
   const [sort, setSortState] = useState<SortConfig<TSortField> | null>(parseSortFromUrl);
 
+  // Keep a ref to sort so closures in setFilter/setFilters always read the latest value
+  const sortRef = useRef(sort);
+  useEffect(() => { sortRef.current = sort; }, [sort]);
+
   // Sync filters to URL
   const syncToUrl = useCallback(
     (newFilters: TFilters, newSort: SortConfig<TSortField> | null) => {
@@ -149,11 +153,11 @@ export function useListFilters<
     <K extends keyof TFilters>(key: K, value: TFilters[K]) => {
       setFiltersState((prev) => {
         const newFilters = { ...prev, [key]: value };
-        syncToUrl(newFilters, sort);
+        syncToUrl(newFilters, sortRef.current);
         return newFilters;
       });
     },
-    [sort, syncToUrl]
+    [syncToUrl]
   );
 
   // Update multiple filters
@@ -161,11 +165,11 @@ export function useListFilters<
     (updates: Partial<TFilters>) => {
       setFiltersState((prev) => {
         const newFilters = { ...prev, ...updates };
-        syncToUrl(newFilters, sort);
+        syncToUrl(newFilters, sortRef.current);
         return newFilters;
       });
     },
-    [sort, syncToUrl]
+    [syncToUrl]
   );
 
   // Reset all filters

@@ -162,6 +162,9 @@ export interface SpecialEvent {
   status: SpecialEventStatus;
   visible: boolean;
 
+  // Linked Add-on (when linked, add-on controls inventory/pricing/display)
+  linkedAddonId: string | null;
+
   // Timestamps
   createdAt: string | null;
   updatedAt: string | null;
@@ -353,6 +356,121 @@ export interface CombinedInvoiceItem {
 }
 
 // ============================================================================
+// Special Event Waitlist Types
+// ============================================================================
+
+export interface SpecialEventWaitlistEntry {
+  id: string;
+  userId: string;
+  specialEventId: string;
+  position: number;
+  joinedAt: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  status: WaitlistStatus;
+  promotedAt: string | null;
+  invoiceSentAt: string | null;
+  confirmedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  specialEventTitle?: string;
+  hasSpecialEventRegistration?: boolean;
+}
+
+export interface SEInvoiceCalculation {
+  waitlistEntryId: string;
+  userId: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  specialEventId: string;
+  specialEventTitle: string;
+  ticketPrice: number;
+  totalAmount: number;
+}
+
+export interface SEWaitlistDuplicateEntry {
+  waitlistEntryId: string;
+  userId: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  specialEventId: string;
+  specialEventTitle: string;
+  waitlistStatus: WaitlistStatus;
+  waitlistPosition: number;
+  waitlistJoinedAt: string;
+  registrationId: string;
+  registrationDate: string;
+}
+
+export interface SEVerificationResult {
+  duplicates: SEWaitlistDuplicateEntry[];
+  totalWaitlistChecked: number;
+  duplicateCount: number;
+}
+
+// ============================================================================
+// Addon Waitlist Types
+// ============================================================================
+
+export interface AddonWaitlistEntry {
+  id: string;
+  userId: string;
+  addonId: string;
+  variantName: string | null;
+  position: number;
+  joinedAt: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  status: WaitlistStatus;
+  promotedAt: string | null;
+  invoiceSentAt: string | null;
+  confirmedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  addonName?: string;
+  hasAddonPurchase?: boolean;
+}
+
+export interface AddonInvoiceCalculation {
+  waitlistEntryId: string;
+  userId: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  addonId: string;
+  addonName: string;
+  variantName: string | null;
+  addonPrice: number;
+  totalAmount: number;
+}
+
+export interface AddonWaitlistDuplicateEntry {
+  waitlistEntryId: string;
+  userId: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  addonId: string;
+  addonName: string;
+  variantName: string | null;
+  waitlistStatus: WaitlistStatus;
+  waitlistPosition: number;
+  waitlistJoinedAt: string;
+  orderItemId: string;
+  orderDate: string;
+}
+
+export interface AddonVerificationResult {
+  duplicates: AddonWaitlistDuplicateEntry[];
+  totalWaitlistChecked: number;
+  duplicateCount: number;
+}
+
+// ============================================================================
 // Event Registration Types
 // ============================================================================
 
@@ -382,6 +500,7 @@ export interface Addon {
   price: number; // in cents
   hasInventory: boolean;
   stockQuantity: number | null;
+  reservedQuantity: number;
   maxPerOrder: number | null;
   hasVariants: boolean;
   variants: AddonVariant[] | null;
@@ -802,7 +921,7 @@ export function isSpecialEvent(item: unknown): item is SpecialEvent {
     item !== null &&
     'title' in item &&
     'venue' in item &&
-    'allowPlusOne' in item
+    'allowNonRegistrants' in item
   );
 }
 
@@ -826,17 +945,17 @@ export function dbToTournament(db: DbTournament): Tournament {
     currentParticipants: db.current_participants,
     waitlistHeldSpots: (db as any).waitlist_held_spots || 0,
     registrationFee: db.registration_fee,
-    earlyBirdPrice: (db as any).early_bird_price || null,
-    earlyBirdStartDate: (db as any).early_bird_start_date || null,
-    earlyBirdEndDate: (db as any).early_bird_end_date || null,
-    stripeEarlyBirdPriceId: (db as any).stripe_early_bird_price_id || null,
+    earlyBirdPrice: db.early_bird_price || null,
+    earlyBirdStartDate: db.early_bird_start_date || null,
+    earlyBirdEndDate: db.early_bird_end_date || null,
+    stripeEarlyBirdPriceId: db.stripe_early_bird_price_id || null,
     date: db.date,
     startTime: db.start_time,
     endTime: db.end_time,
     location: db.location,
     status: db.status as TournamentStatus,
     visible: db.visible ?? true,
-    displayOrder: (db as any).display_order ?? 0,
+    displayOrder: db.display_order ?? 0,
     headerImageUrl: db.header_image_url || null,
     galleryImages: db.gallery_images || [],
     stripeProductId: db.stripe_product_id,
@@ -863,12 +982,12 @@ export function dbToActivity(db: DbActivity): Activity {
     maxParticipants: db.max_participants,
     currentParticipants: db.current_participants,
     fee: db.fee,
-    earlyBirdPrice: (db as any).early_bird_price || null,
-    earlyBirdStartDate: (db as any).early_bird_start_date || null,
-    earlyBirdEndDate: (db as any).early_bird_end_date || null,
-    stripeProductId: (db as any).stripe_product_id || null,
-    stripePriceId: (db as any).stripe_price_id || null,
-    stripeEarlyBirdPriceId: (db as any).stripe_early_bird_price_id || null,
+    earlyBirdPrice: db.early_bird_price || null,
+    earlyBirdStartDate: db.early_bird_start_date || null,
+    earlyBirdEndDate: db.early_bird_end_date || null,
+    stripeProductId: db.stripe_product_id || null,
+    stripePriceId: db.stripe_price_id || null,
+    stripeEarlyBirdPriceId: db.stripe_early_bird_price_id || null,
     requiresRegistration: db.requires_registration,
     skillLevel: db.skill_level as SkillLevel | null,
     status: db.status as ActivityStatus,
@@ -906,9 +1025,9 @@ export function dbToEventRegistration(db: DbEventRegistration): EventRegistratio
     eventYear: db.event_year,
     registrationFee: db.registration_fee,
     paymentStatus: db.payment_status as PaymentStatus,
-    registeredAt: db.registered_at!,
-    createdAt: db.created_at!,
-    updatedAt: db.updated_at!,
+    registeredAt: db.registered_at ?? new Date().toISOString(),
+    createdAt: db.created_at ?? new Date().toISOString(),
+    updatedAt: db.updated_at ?? new Date().toISOString(),
   };
 }
 
@@ -923,10 +1042,11 @@ export function dbToAddon(db: DbAddon): Addon {
     description: db.description,
     category: db.category as AddonCategory,
     price: db.price,
-    hasInventory: db.has_inventory!,
+    hasInventory: db.has_inventory ?? false,
     stockQuantity: db.stock_quantity,
+    reservedQuantity: db.reserved_quantity ?? 0,
     maxPerOrder: db.max_per_order,
-    hasVariants: db.has_variants!,
+    hasVariants: db.has_variants ?? false,
     variants: db.variants as AddonVariant[] | null,
     stripeProductId: db.stripe_product_id,
     stripePriceId: db.stripe_price_id,
@@ -934,11 +1054,11 @@ export function dbToAddon(db: DbAddon): Addon {
     galleryUrls: db.gallery_urls,
     availableFrom: db.available_from,
     availableUntil: db.available_until,
-    isActive: db.is_active!,
-    featured: db.featured!,
-    sortOrder: db.sort_order!,
-    createdAt: db.created_at!,
-    updatedAt: db.updated_at!,
+    isActive: db.is_active ?? true,
+    featured: db.featured ?? false,
+    sortOrder: db.sort_order ?? 0,
+    createdAt: db.created_at ?? new Date().toISOString(),
+    updatedAt: db.updated_at ?? new Date().toISOString(),
   };
 }
 
@@ -949,9 +1069,9 @@ export function dbToOrder(db: DbOrder): Order {
   return {
     id: db.id,
     userId: db.user_id,
-    orderNumber: db.order_number!,
-    subtotal: db.subtotal!,
-    tax: db.tax!,
+    orderNumber: db.order_number ?? '',
+    subtotal: db.subtotal ?? 0,
+    tax: db.tax ?? 0,
     total: db.total,
     paymentStatus: db.payment_status as PaymentStatus,
     paymentMethod: db.payment_method,
@@ -965,8 +1085,8 @@ export function dbToOrder(db: DbOrder): Order {
     adminNotes: db.admin_notes,
     paidAt: db.paid_at,
     cancelledAt: db.cancelled_at,
-    createdAt: db.created_at!,
-    updatedAt: db.updated_at!,
+    createdAt: db.created_at ?? new Date().toISOString(),
+    updatedAt: db.updated_at ?? new Date().toISOString(),
   };
 }
 
@@ -988,15 +1108,15 @@ export function dbToOrderItem(db: DbOrderItem): OrderItem {
     itemSku: db.item_sku,
     variantName: db.variant_name,
     variantData: db.variant_data as Record<string, unknown> | null,
-    unitPrice: db.unit_price!,
-    quantity: db.quantity!,
-    subtotal: db.subtotal!,
-    tax: db.tax!,
-    total: db.total!,
-    discountAmount: db.discount_amount!,
+    unitPrice: db.unit_price ?? 0,
+    quantity: db.quantity ?? 1,
+    subtotal: db.subtotal ?? 0,
+    tax: db.tax ?? 0,
+    total: db.total ?? 0,
+    discountAmount: db.discount_amount ?? 0,
     discountCode: db.discount_code,
-    createdAt: db.created_at!,
-    updatedAt: db.updated_at!,
+    createdAt: db.created_at ?? new Date().toISOString(),
+    updatedAt: db.updated_at ?? new Date().toISOString(),
   };
 }
 
@@ -1027,11 +1147,11 @@ export function dbToHotelPartner(db: DbHotelPartner): HotelPartner {
     backgroundImageUrl: db.background_image_url,
     imageUrl: db.image_url,
     galleryUrls: db.gallery_urls,
-    isPrimary: db.is_primary!,
-    isActive: db.is_active!,
-    displayOrder: db.display_order!,
-    createdAt: db.created_at!,
-    updatedAt: db.updated_at!,
+    isPrimary: db.is_primary ?? false,
+    isActive: db.is_active ?? true,
+    displayOrder: db.display_order ?? 0,
+    createdAt: db.created_at ?? new Date().toISOString(),
+    updatedAt: db.updated_at ?? new Date().toISOString(),
   };
 }
 
@@ -1046,10 +1166,10 @@ export function dbToSponsor(db: DbSponsor): Sponsor {
     websiteUrl: db.website_url,
     boothNumber: db.booth_number,
     color: db.color,
-    visible: db.visible!,
-    displayOrder: db.display_order!,
-    createdAt: db.created_at!,
-    updatedAt: db.updated_at!,
+    visible: db.visible ?? false,
+    displayOrder: db.display_order ?? 0,
+    createdAt: db.created_at ?? new Date().toISOString(),
+    updatedAt: db.updated_at ?? new Date().toISOString(),
   };
 }
 
@@ -1060,16 +1180,16 @@ export function dbToGuestInstructor(db: DbGuestInstructor): GuestInstructor {
   return {
     id: db.id,
     name: db.name,
-    bio: db.bio,
+    bio: db.bio ?? '',
     specialties: db.specialties || [],
     teachingFocus: db.teaching_focus,
     photoUrl: db.photo_url,
     websiteUrl: db.website_url,
     socialLinks: (db.social_links as SocialLinks) || {},
-    isFeatured: db.is_featured!,
-    displayOrder: db.display_order!,
-    createdAt: db.created_at!,
-    updatedAt: db.updated_at!,
+    isFeatured: db.is_featured ?? false,
+    displayOrder: db.display_order ?? 0,
+    createdAt: db.created_at ?? new Date().toISOString(),
+    updatedAt: db.updated_at ?? new Date().toISOString(),
   };
 }
 
@@ -1086,9 +1206,9 @@ export function dbToOrganizer(db: DbOrganizer): Organizer {
     email: db.email,
     phone: db.phone,
     socialLinks: (db.social_links as SocialLinks) || {},
-    displayOrder: db.display_order!,
-    createdAt: db.created_at!,
-    updatedAt: db.updated_at!,
+    displayOrder: db.display_order ?? 0,
+    createdAt: db.created_at ?? new Date().toISOString(),
+    updatedAt: db.updated_at ?? new Date().toISOString(),
   };
 }
 
@@ -1123,7 +1243,7 @@ export function dbToSiteSetting(db: DbSiteSetting): SiteSetting {
     settingValue: db.setting_value,
     settingType: db.setting_type as SettingType,
     description: db.description,
-    updatedAt: db.updated_at!,
+    updatedAt: db.updated_at ?? new Date().toISOString(),
   };
 }
 
@@ -1153,14 +1273,14 @@ export function dbToSpecialEvent(db: DbSpecialEvent): SpecialEvent {
     dressCodeDetails: db.dress_code_details || null,
     ticketPrice: db.ticket_price || 0,
     eventRegistrantPrice: db.event_registrant_price || null,
-    earlyBirdTicketPrice: (db as any).early_bird_ticket_price || null,
-    earlyBirdStartDate: (db as any).early_bird_start_date || null,
-    earlyBirdEndDate: (db as any).early_bird_end_date || null,
-    stripeProductId: (db as any).stripe_product_id || null,
-    stripePriceId: (db as any).stripe_price_id || null,
-    stripeEarlyBirdPriceId: (db as any).stripe_early_bird_price_id || null,
+    earlyBirdTicketPrice: db.early_bird_ticket_price || null,
+    earlyBirdStartDate: db.early_bird_start_date || null,
+    earlyBirdEndDate: db.early_bird_end_date || null,
+    stripeProductId: db.stripe_product_id || null,
+    stripePriceId: db.stripe_price_id || null,
+    stripeEarlyBirdPriceId: db.stripe_early_bird_price_id || null,
     allowNonRegistrants: db.allow_non_registrants ?? true,
-    allowStandalonePurchase: (db as any).allow_standalone_purchase ?? true,
+    allowStandalonePurchase: db.allow_standalone_purchase ?? true,
     maxCapacity: db.max_capacity || null,
     currentRegistrations: db.current_registrations || 0,
     registrationOpensAt: db.registration_opens_at || null,
@@ -1171,6 +1291,7 @@ export function dbToSpecialEvent(db: DbSpecialEvent): SpecialEvent {
     isActive: db.is_active ?? false,
     status: (db.status as SpecialEventStatus) || 'draft',
     visible: db.visible ?? true,
+    linkedAddonId: (db as any).linked_addon_id || null,
     createdAt: db.created_at,
     updatedAt: db.updated_at,
   };
