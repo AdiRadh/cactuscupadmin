@@ -56,7 +56,7 @@ const defaultFooterLegalLinks: FooterLink[] = [
 const defaultSettings: SiteSettings = {
   siteName: 'Cactus Cup',
   eventLocation: 'Phoenix, Arizona',
-  contactEmail: 'info@cactuscup.com',
+  contactEmail: 'cactuscuphema@gmail.com',
   socialFacebook: '',
   socialInstagram: '',
   socialTwitter: '',
