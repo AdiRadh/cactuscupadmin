@@ -20,6 +20,9 @@ import {
   HandHeart,
   FileSignature,
   ClipboardList,
+  Store,
+  Tag,
+  Link2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { cn } from '@/lib/utils/cn';
@@ -61,6 +64,9 @@ const navItems: NavItem[] = [
   { label: 'Event Registration', icon: Ticket, path: '/event-registration-settings' },
   { label: 'Waiver Settings', icon: FileSignature, path: '/waiver-settings' },
   { label: 'Email Templates', icon: Mail, path: '/email-templates' },
+  { label: 'Vendor Registrations', icon: Store, path: '/vendor-registrations' },
+  { label: 'Vendor Discount Codes', icon: Tag, path: '/vendor-discount-codes' },
+  { label: 'Vendor URL', icon: Link2, path: '/vendor-url' },
 ];
 
 /**

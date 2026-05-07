@@ -42,6 +42,11 @@ import { EventRegistrationSettings } from '@/pages/admin/event-registration-sett
 import { WaiverSettings } from '@/pages/admin/waiver-settings/WaiverSettings';
 import { WaitlistList } from '@/pages/admin/waitlist/WaitlistList';
 import { PendingBilling } from '@/pages/admin/billing/PendingBilling';
+import { VendorRegistrationsList } from '@/pages/admin/vendor-registrations/VendorRegistrationsList';
+import { VendorDiscountCodesList } from '@/pages/admin/vendor-discount-codes/VendorDiscountCodesList';
+import { VendorDiscountCodeCreate } from '@/pages/admin/vendor-discount-codes/VendorDiscountCodeCreate';
+import { VendorDiscountCodeEdit } from '@/pages/admin/vendor-discount-codes/VendorDiscountCodeEdit';
+import { VendorUrlPanel } from '@/pages/admin/vendor-url/VendorUrlPanel';
 
 /**
  * Admin Panel App component
@@ -195,6 +200,29 @@ export const App: FC = () => {
               label: 'Pending Billing',
             },
           },
+          {
+            name: 'vendor_registrations',
+            list: '/vendor-registrations',
+            meta: {
+              label: 'Vendor Registrations',
+            },
+          },
+          {
+            name: 'vendor_discount_codes',
+            list: '/vendor-discount-codes',
+            create: '/vendor-discount-codes/create',
+            edit: '/vendor-discount-codes/edit/:id',
+            meta: {
+              label: 'Vendor Discount Codes',
+            },
+          },
+          {
+            name: 'vendor_url',
+            list: '/vendor-url',
+            meta: {
+              label: 'Vendor URL',
+            },
+          },
         ]}
         options={{
           syncWithLocation: true,
@@ -248,6 +276,11 @@ export const App: FC = () => {
                     <Route path="/waiver-settings" element={<WaiverSettings />} />
                     <Route path="/waitlist" element={<WaitlistList />} />
                     <Route path="/pending-billing" element={<PendingBilling />} />
+                    <Route path="/vendor-registrations" element={<VendorRegistrationsList />} />
+                    <Route path="/vendor-discount-codes" element={<VendorDiscountCodesList />} />
+                    <Route path="/vendor-discount-codes/create" element={<VendorDiscountCodeCreate />} />
+                    <Route path="/vendor-discount-codes/edit/:id" element={<VendorDiscountCodeEdit />} />
+                    <Route path="/vendor-url" element={<VendorUrlPanel />} />
                     <Route path="*" element={<Navigate to="/" replace />} />
                   </Routes>
                 </AdminLayout>
