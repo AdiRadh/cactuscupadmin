@@ -213,17 +213,8 @@ export const VendorUrlPanel: FC = () => {
   );
 };
 
-/**
- * Best-guess origin for the public site. The admin runs on a separate origin
- * so window.location.origin would point at the admin app — that's wrong.
- * If VITE_PUBLIC_SITE_URL is set we use it; otherwise we strip a leading
- * "admin." subdomain from the current host as a heuristic.
- */
 function getPublicSiteOrigin(): string {
   const envUrl = (import.meta as any).env?.VITE_PUBLIC_SITE_URL;
   if (envUrl) return String(envUrl).replace(/\/+$/, '');
-  if (typeof window === 'undefined') return '';
-  const { protocol, host } = window.location;
-  const stripped = host.replace(/^admin\./, '');
-  return `${protocol}//${stripped}`;
+  return 'https://cactuscuphema.com';
 }
